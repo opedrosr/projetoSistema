@@ -893,7 +893,15 @@ function AuthPage() {
       console.error('ERRO REAL DO SUPABASE:', err);
 
       const message =
-        err instanceof Error ? err.message : String(err);
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null
+            ? (
+                'message' in err && typeof err.message === 'string'
+                  ? err.message
+                  : JSON.stringify(err)
+              )
+            : String(err);
 
       setError(message);
     } finally {
@@ -1877,62 +1885,15 @@ function Hours({
   const [hours, setHours] = useState(initial);
 
   async function save() {
-    try {
-      const savedHours = [];
-
-      for (const hour of hours) {
-        const payload = {
-          profile_id: data.profile.id,
-          professional_id: data.profile.id,
-          day_of_week: hour.day_of_week,
-          is_open: Boolean(hour.is_open),
-          active: Boolean(hour.is_open),
-          start_time: hour.is_open ? hour.start_time : null,
-          end_time: hour.is_open ? hour.end_time : null,
-        };
-
-        console.log('SALVANDO HORÁRIO:', payload);
-
-        const result = hour.id
-          ? await supabase
-              .from('business_hours')
-              .update(payload)
-              .eq('id', hour.id)
-              .select()
-              .maybeSingle()
-          : await supabase
-              .from('business_hours')
-              .insert(payload)
-              .select()
-              .maybeSingle();
-
-        console.log('RESPOSTA DO SUPABASE - HORÁRIO:', result);
-
-        if (result.error) {
-          console.error('ERRO AO SALVAR HORÁRIO:', result.error);
-          alert(`Erro ao salvar horários: ${result.error.message}`);
-          return;
-        }
-
-        if (!result.data) {
-          console.error('HORÁRIO NÃO RETORNADO PELO SUPABASE:', result);
-          alert('O horário não foi retornado pelo Supabase.');
-          return;
-        }
-
-        savedHours.push(result.data as (typeof hours)[number]);
-      }
-
-      setData({ ...data, hours: savedHours });
-      alert('Horários salvos com sucesso.');
-    } catch (err) {
-      console.error('ERRO INESPERADO AO SALVAR HORÁRIOS:', err);
-
-      const message =
-        err instanceof Error ? err.message : String(err);
-
-      alert(`Erro ao salvar horários: ${message}`);
+    for (const hour of hours) {
+      await supabase
+        .from('business_hours')
+        .upsert(hour, {
+          onConflict: 'profile_id,day_of_week',
+        });
     }
+
+    setData({ ...data, hours });
   }
 
   return (
@@ -2053,70 +2014,30 @@ function Blocks({
   async function add(event: FormEvent) {
     event.preventDefault();
 
-    if (!form.starts_at || !form.ends_at) {
-      alert('Informe o início e o fim do bloqueio.');
-      return;
-    }
-
-    const startsAt = new Date(form.starts_at);
-    const endsAt = new Date(form.ends_at);
-
-    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-      alert('Informe datas válidas.');
-      return;
-    }
-
-    if (endsAt <= startsAt) {
-      alert('O término do bloqueio deve ser depois do início.');
-      return;
-    }
-
-    const payload = {
-      profile_id: data.profile.id,
-      professional_id: data.profile.id,
-      starts_at: startsAt.toISOString(),
-      ends_at: endsAt.toISOString(),
-      start_at: startsAt.toISOString(),
-      end_at: endsAt.toISOString(),
-      reason: form.reason.trim() || null,
-    };
-
-    console.log('SALVANDO BLOQUEIO:', payload);
-
     const result = await supabase
       .from('blocked_times')
-      .insert(payload)
+      .insert({
+        ...form,
+        profile_id: data.profile.id,
+      })
       .select()
       .maybeSingle();
 
-    console.log('RESPOSTA DO SUPABASE - BLOQUEIO:', result);
+    if (!result.error && result.data) {
+      setData({
+        ...data,
+        blocks: [
+          ...data.blocks,
+          result.data as BlockedTime,
+        ],
+      });
 
-    if (result.error) {
-      console.error('ERRO AO SALVAR BLOQUEIO:', result.error);
-      alert(`Erro ao salvar bloqueio: ${result.error.message}`);
-      return;
+      setForm({
+        starts_at: '',
+        ends_at: '',
+        reason: '',
+      });
     }
-
-    if (!result.data) {
-      alert('O bloqueio não foi retornado pelo Supabase.');
-      return;
-    }
-
-    setData({
-      ...data,
-      blocks: [
-        ...data.blocks,
-        result.data as BlockedTime,
-      ],
-    });
-
-    setForm({
-      starts_at: '',
-      ends_at: '',
-      reason: '',
-    });
-
-    alert('Bloqueio criado com sucesso.');
   }
 
   async function remove(id: string) {
@@ -2125,18 +2046,14 @@ function Blocks({
       .delete()
       .eq('id', id);
 
-    if (result.error) {
-      console.error('ERRO AO EXCLUIR BLOQUEIO:', result.error);
-      alert(`Erro ao excluir bloqueio: ${result.error.message}`);
-      return;
+    if (!result.error) {
+      setData({
+        ...data,
+        blocks: data.blocks.filter(
+          (item) => item.id !== id,
+        ),
+      });
     }
-
-    setData({
-      ...data,
-      blocks: data.blocks.filter(
-        (item) => item.id !== id,
-      ),
-    });
   }
 
   return (
@@ -2204,7 +2121,6 @@ function Blocks({
                     </span>
 
                     <button
-                      type="button"
                       className="small-action danger"
                       onClick={() =>
                         remove(block.id)
@@ -2259,7 +2175,7 @@ function Blocks({
 
           <Field
             label="Motivo"
-            placeholder="Ex.: Almoço, compromisso, folga"
+            placeholder="Ex.: Compromisso pessoal"
             value={form.reason}
             onChange={(event) =>
               setForm({
@@ -2271,7 +2187,7 @@ function Blocks({
 
           <Button type="submit">
             <Plus size={17} />
-            Criar bloqueio
+            Adicionar bloqueio
           </Button>
         </form>
       </div>
