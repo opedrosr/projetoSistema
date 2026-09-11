@@ -1770,8 +1770,12 @@ function Hours({
     days.map((_, index) =>
       data.availability
         .filter((slot) => slot.day_of_week === index)
-        .map((slot) => slot.start_time.slice(0, 5)),
+        .map((slot) => slot.start_time.slice(0, 5))
+        .sort(),
     ),
+  );
+  const [newSlotByDay, setNewSlotByDay] = useState<string[]>(
+    days.map(() => ''),
   );
   const [saving, setSaving] = useState(false);
 
@@ -1789,35 +1793,38 @@ function Hours({
   }
 
   function addSlot(dayIndex: number) {
-    const current = slotsByDay[dayIndex];
-    const fallback =
-      hours[dayIndex].start_time || '09:00';
+    const value = newSlotByDay[dayIndex];
+    if (!value) return;
 
-    if (current.includes(fallback)) {
+    const hour = hours[dayIndex];
+    const current = slotsByDay[dayIndex];
+
+    if (!hour.is_open) return;
+
+    if (hour.start_time && value < hour.start_time) {
+      window.alert('Esse horário está antes do início do atendimento.');
+      return;
+    }
+
+    if (hour.end_time && value >= hour.end_time) {
+      window.alert('Esse horário está fora do horário de atendimento.');
+      return;
+    }
+
+    if (current.includes(value)) {
+      window.alert('Esse horário já foi adicionado.');
       return;
     }
 
     setSlotsByDay((currentDays) =>
       currentDays.map((slots, index) =>
-        index === dayIndex
-          ? [...slots, fallback].sort()
-          : slots,
+        index === dayIndex ? [...slots, value].sort() : slots,
       ),
     );
-  }
 
-  function updateSlot(
-    dayIndex: number,
-    slotIndex: number,
-    value: string,
-  ) {
-    setSlotsByDay((currentDays) =>
-      currentDays.map((slots, index) =>
-        index === dayIndex
-          ? slots.map((slot, itemIndex) =>
-              itemIndex === slotIndex ? value : slot,
-            )
-          : slots,
+    setNewSlotByDay((currentValues) =>
+      currentValues.map((time, index) =>
+        index === dayIndex ? '' : time,
       ),
     );
   }
@@ -1872,7 +1879,7 @@ function Hours({
       const rows = slotsByDay.flatMap(
         (slots, dayIndex) =>
           [...slots]
-            .filter((time) => time)
+            .filter(Boolean)
             .sort()
             .map((time) => ({
               profile_id: data.profile.id,
@@ -1924,7 +1931,7 @@ function Hours({
           </div>
           <h1>Horários</h1>
           <p>
-            Você define quando atende e quais horários suas clientes podem escolher.
+            Defina quando você atende e quais horários suas clientes podem escolher.
           </p>
         </div>
 
@@ -1987,84 +1994,126 @@ function Hours({
               <div
                 style={{
                   gridColumn: '1 / -1',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 10,
                   marginTop: 8,
                   paddingLeft: 44,
                 }}
               >
-                <div>
+                <div
+                  style={{
+                    borderTop: '1px solid rgba(0,0,0,.08)',
+                    paddingTop: 14,
+                  }}
+                >
                   <strong style={{ fontSize: 13 }}>
-                    Horários que a cliente pode escolher
+                    Horários disponíveis para clientes
                   </strong>
                   <p
                     style={{
-                      margin: '4px 0 10px',
+                      margin: '4px 0 12px',
                       fontSize: 12,
                       opacity: 0.65,
                     }}
                   >
-                    Cadastre os horários de início. A duração do serviço será aplicada automaticamente.
+                    Adicione apenas os horários em que uma cliente pode começar um atendimento.
                   </p>
-                </div>
 
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 8,
-                    alignItems: 'center',
-                  }}
-                >
-                  {slotsByDay[index].map((slot, slotIndex) => (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                      alignItems: 'center',
+                    }}
+                  >
+                    {slotsByDay[index].map((slot, slotIndex) => (
+                      <div
+                        key={`${index}-${slot}-${slotIndex}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 7,
+                          padding: '7px 9px 7px 11px',
+                          border: '1px solid rgba(0,0,0,.10)',
+                          borderRadius: 999,
+                          background: 'rgba(0,0,0,.025)',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            fontVariantNumeric: 'tabular-nums',
+                          }}
+                        >
+                          {slot}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Remover horário ${slot}`}
+                          onClick={() =>
+                            removeSlot(index, slotIndex)
+                          }
+                          style={{
+                            border: 0,
+                            background: 'transparent',
+                            padding: 2,
+                            display: 'grid',
+                            placeItems: 'center',
+                            cursor: 'pointer',
+                            opacity: 0.6,
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+
                     <div
-                      key={`${index}-${slotIndex}`}
                       style={{
-                        display: 'flex',
+                        display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 4,
+                        gap: 7,
                       }}
                     >
                       <input
                         type="time"
-                        value={slot}
+                        value={newSlotByDay[index]}
                         onChange={(event) =>
-                          updateSlot(
-                            index,
-                            slotIndex,
-                            event.target.value,
+                          setNewSlotByDay((currentValues) =>
+                            currentValues.map((time, itemIndex) =>
+                              itemIndex === index
+                                ? event.target.value
+                                : time,
+                            ),
                           )
                         }
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            addSlot(index);
+                          }
+                        }}
                       />
                       <button
                         type="button"
-                        className="icon-button"
-                        aria-label="Remover horário"
-                        onClick={() =>
-                          removeSlot(index, slotIndex)
-                        }
+                        className="button button-soft"
+                        onClick={() => addSlot(index)}
                       >
-                        <Trash2 size={15} />
+                        <Plus size={15} />
+                        Adicionar
                       </button>
                     </div>
-                  ))}
+                  </div>
 
-                  <button
-                    type="button"
-                    className="button button-soft"
-                    onClick={() => addSlot(index)}
-                  >
-                    <Plus size={15} />
-                    Adicionar horário
-                  </button>
+                  {!slotsByDay[index].length && (
+                    <span
+                      className="closed"
+                      style={{ display: 'block', marginTop: 10 }}
+                    >
+                      Nenhum horário adicionado ainda.
+                    </span>
+                  )}
                 </div>
-
-                {!slotsByDay[index].length && (
-                  <span className="closed">
-                    Nenhum horário de agendamento configurado.
-                  </span>
-                )}
               </div>
             )}
           </div>
