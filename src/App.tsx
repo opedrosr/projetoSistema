@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -12,6 +12,8 @@ import {
   LogOut,
   MapPin,
   Menu,
+  Moon,
+  Sun,
   MessageCircle,
   Plus,
   Scissors,
@@ -926,7 +928,7 @@ function AuthPage() {
   );
 }
 
-function Dashboard({ userId }: { userId: string }) {
+function Dashboard({ userId, onToggleTheme, theme }: { userId: string; onToggleTheme: () => void; theme: 'light' | 'dark' }) {
   const [data, setData] = useState<OwnerData>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -947,17 +949,21 @@ function Dashboard({ userId }: { userId: string }) {
 
   if (loading) return <div className="center-page"><LoaderCircle className="spin" /><p>Carregando seu espaço...</p></div>;
   if (error || !data) return <div className="center-page"><div className="panel centered"><div className="eyebrow">Não foi possível abrir o painel</div><h1>{error || 'Seu perfil não foi encontrado.'}</h1><p>Se você acabou de criar a conta, confirme o e-mail e entre novamente.</p><Button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}>Voltar para o login</Button></div></div>;
-  return <DashboardLayout data={data} setData={setData} />;
+  return <DashboardLayout data={data} setData={setData} onToggleTheme={onToggleTheme} theme={theme} />;
 }
 
 function DashboardLayout({
   data,
   setData,
+  onToggleTheme,
+  theme,
 }: {
   data: NonNullable<OwnerData>;
   setData: React.Dispatch<
     React.SetStateAction<OwnerData | undefined>
   >;
+  onToggleTheme: () => void;
+  theme: 'light' | 'dark';
 }) {
   const path = window.location.pathname;
   const [mobileNav, setMobileNav] = useState(false);
@@ -1056,6 +1062,17 @@ function DashboardLayout({
                 'Configure seu negócio'}
             </strong>
           </div>
+
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={onToggleTheme}
+            aria-label={theme === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}
+            title={theme === 'light' ? 'Modo escuro' : 'Modo claro'}
+          >
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            <span className="theme-toggle-label">{theme === 'light' ? 'Modo escuro' : 'Modo claro'}</span>
+          </button>
 
           <a
             className="public-link"
@@ -1232,7 +1249,7 @@ function AppointmentCard({
   onCancel,
 }: {
   appointment: Appointment;
-  onCancel?: () => void;
+  onCancel?: () => void | Promise<void>;
 }) {
   return (
     <div className="appointment-card">
@@ -1295,7 +1312,7 @@ function AppointmentCard({
 
 function Appointments({
   data,
-  setData,
+  setData
 }: {
   data: NonNullable<OwnerData>;
   setData: React.Dispatch<
@@ -1404,7 +1421,7 @@ function Appointments({
 
 function Services({
   data,
-  setData,
+  setData
 }: {
   data: NonNullable<OwnerData>;
   setData: React.Dispatch<
@@ -1745,7 +1762,7 @@ function Services({
 
 function Hours({
   data,
-  setData,
+  setData
 }: {
   data: NonNullable<OwnerData>;
   setData: React.Dispatch<
@@ -2125,7 +2142,7 @@ function Hours({
 
 function Blocks({
   data,
-  setData,
+  setData
 }: {
   data: NonNullable<OwnerData>;
   setData: React.Dispatch<
@@ -3067,6 +3084,242 @@ function DesignSystem() {
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
       }
+      /* FINAL SCALE / DENSITY PASS */
+      .dashboard-shell { grid-template-columns: 250px minmax(0,1fr); }
+      .sidebar { padding: 18px 14px; }
+      .sidebar-top { padding: 0 7px 11px; }
+      .side-profile { gap: 11px; padding: 12px 10px; margin-bottom: 9px; }
+      .side-profile strong { max-width: 170px; font-size: 13px; }
+      .side-profile span { max-width: 170px; font-size: 10px; }
+      .sidebar nav { gap: 1px; }
+      .sidebar nav a { gap: 11px; padding: 11px 11px; border-radius: 10px; font-size: 13px; }
+      .sidebar nav a.active::before { left: -14px; height: 22px; }
+      .logout { gap: 11px; padding: 11px; font-size: 13px; }
+
+      .dashboard-top { min-height: 68px; gap: 12px; padding: 10px clamp(18px,2.5vw,32px); }
+      .top-kicker { font-size: 10px; }
+      .dashboard-top strong { font-size: 14px; }
+      .public-link { gap: 8px; padding: 10px 12px; border-radius: 10px; font-size: 11px; }
+
+      .dashboard-content { width: min(1180px, calc(100% - 48px)); padding: 34px 0 60px; }
+      .page-title { gap: 24px; margin-bottom: 24px; }
+      .page-title h1 { font-size: 40px; }
+      .page-title p { font-size: 13px; }
+      .dashboard-section, .form-card, .hours-card, .link-card { border-radius: 16px; }
+      .dashboard-section { padding: 21px; }
+      .form-card { gap: 14px; padding: 21px; }
+      .form-card h2, .section-heading h2 { font-size: 18px; }
+      .section-heading { margin-bottom: 16px; }
+
+      .metric-card { min-height: 122px; padding: 18px; }
+      .metric-card strong { font-size: 28px; }
+      .metric-card span { font-size: 11px; }
+      .appointment-card { gap: 13px; padding: 15px; }
+      .appointment-card strong { font-size: 14px; }
+      .appointment-card span { font-size: 11px; }
+
+      /* Keep the sidebar visually compact while making its controls larger. */
+      .sidebar > * { flex-shrink: 0; }
+      .sidebar nav a svg, .logout svg { width: 18px; height: 18px; }
+
+      @media (max-width: 1100px) {
+        .dashboard-shell { grid-template-columns: 228px minmax(0,1fr); }
+        .dashboard-content { width: min(1040px, calc(100% - 36px)); }
+        .sidebar nav a { font-size: 12px; }
+      }
+
+      @media (max-width: 640px) {
+        .dashboard-content { width: calc(100% - 24px); padding: 24px 0 44px; }
+        .page-title h1 { font-size: 34px; }
+        .page-title p { font-size: 12px; }
+        .dashboard-section, .form-card { padding: 18px; }
+        .dashboard-top strong { font-size: 13px; }
+      }
+
+      /* THEME TOKENS */
+      :root {
+        --app-bg: #f5f5f4;
+        --app-surface: #ffffff;
+        --app-surface-soft: #f7f7f6;
+        --app-text: #111214;
+        --app-text-2: #4e535a;
+        --app-muted: #777c83;
+        --app-line: rgba(17,18,20,.085);
+        --app-line-strong: rgba(17,18,20,.14);
+        --app-shadow: 0 18px 50px rgba(17,18,20,.085);
+      }
+
+      html[data-theme='dark'] {
+        color-scheme: dark;
+        --ui-ink: #f4f5f6;
+        --ui-ink-2: #d5d8dc;
+        --ui-muted: #9da3aa;
+        --ui-soft: #1b1d20;
+        --ui-soft-2: #25282c;
+        --ui-line: rgba(255,255,255,.09);
+        --ui-line-strong: rgba(255,255,255,.16);
+        --ui-white: rgba(28,30,33,.9);
+        --ui-shadow-sm: 0 8px 24px rgba(0,0,0,.24);
+        --ui-shadow: 0 18px 50px rgba(0,0,0,.32);
+        --app-bg: #111315;
+        --app-surface: #191b1e;
+        --app-surface-soft: #202328;
+        --app-text: #f4f5f6;
+        --app-text-2: #d0d4d8;
+        --app-muted: #9da3aa;
+        --app-line: rgba(255,255,255,.09);
+        --app-line-strong: rgba(255,255,255,.16);
+        --app-shadow: 0 18px 50px rgba(0,0,0,.32);
+      }
+
+      html[data-theme='dark'] body { background:var(--app-bg); color:var(--app-text); }
+      html[data-theme='dark'] .brand-mark { background:#f4f5f6; color:#111214; box-shadow:0 8px 20px rgba(0,0,0,.28); }
+      html[data-theme='dark'] .brand-dot { color:#686e76; }
+      html[data-theme='dark'] .eyebrow,
+      html[data-theme='dark'] .muted,
+      html[data-theme='dark'] .page-title p,
+      html[data-theme='dark'] .auth-lead,
+      html[data-theme='dark'] .profile-description,
+      html[data-theme='dark'] .contact-strip p,
+      html[data-theme='dark'] .location-section p,
+      html[data-theme='dark'] .appointment-time span,
+      html[data-theme='dark'] .appointment-info span,
+      html[data-theme='dark'] .metric-card > span,
+      html[data-theme='dark'] .metric-card p,
+      html[data-theme='dark'] .closed,
+      html[data-theme='dark'] .text-link { color:var(--app-muted); }
+
+      html[data-theme='dark'] .button-primary,
+      html[data-theme='dark'] .button-dark { color:#111214; background:#f4f5f6; box-shadow:0 10px 24px rgba(0,0,0,.3); }
+      html[data-theme='dark'] .button-soft { color:#f0f2f4; background:#202328; border-color:var(--app-line-strong); box-shadow:none; }
+      html[data-theme='dark'] .button-ghost { color:#b3b8be; }
+      html[data-theme='dark'] .button-danger { color:#ffb1b1; background:#321d1f; border-color:rgba(255,120,120,.16); }
+      html[data-theme='dark'] .icon-button { color:#e8eaec; background:#1c1f22; border-color:var(--app-line); }
+      html[data-theme='dark'] .icon-button:hover { background:#25282c; }
+
+      html[data-theme='dark'] .field > span,
+      html[data-theme='dark'] .media-field > span { color:#c9cdd1; }
+      html[data-theme='dark'] .field input,
+      html[data-theme='dark'] .field textarea,
+      html[data-theme='dark'] .time-inputs input,
+      html[data-theme='dark'] .hours-row input[type='time'] {
+        background:#1b1e21 !important;
+        color:#f4f5f6 !important;
+        border-color:var(--app-line-strong) !important;
+        box-shadow:none !important;
+      }
+      html[data-theme='dark'] .field input::placeholder,
+      html[data-theme='dark'] .field textarea::placeholder { color:#747b83; }
+      html[data-theme='dark'] .field input:focus,
+      html[data-theme='dark'] .field textarea:focus { border-color:rgba(255,255,255,.34) !important; box-shadow:0 0 0 3px rgba(255,255,255,.06) !important; }
+      html[data-theme='dark'] .form-error { color:#ffb2b2; background:#321d1f; border-color:rgba(255,120,120,.15); }
+      html[data-theme='dark'] .saved { color:#a7e1bb; background:#182a20; border-color:rgba(120,220,155,.14); }
+
+      html[data-theme='dark'] .center-page { background:radial-gradient(circle at 50% 15%,#25282c,transparent 36%),#111315; }
+      html[data-theme='dark'] .panel,
+      html[data-theme='dark'] .auth-card,
+      html[data-theme='dark'] .dashboard-section,
+      html[data-theme='dark'] .form-card,
+      html[data-theme='dark'] .hours-card,
+      html[data-theme='dark'] .link-card { background:rgba(25,27,30,.94); border-color:var(--app-line); box-shadow:var(--app-shadow); }
+      html[data-theme='dark'] .panel.centered p { color:var(--app-muted); }
+
+      html[data-theme='dark'] .home-page { background:radial-gradient(circle at 82% 20%,#25282c,transparent 24%),linear-gradient(135deg,#111315 0%,#151719 58%,#202328 100%); }
+      html[data-theme='dark'] .home-page::before,
+      html[data-theme='dark'] .auth-aside::after,
+      html[data-theme='dark'] .public-shell::before { border-color:rgba(255,255,255,.07); }
+      html[data-theme='dark'] .home-copy p,
+      html[data-theme='dark'] .auth-aside p { color:#a8adb3; }
+      html[data-theme='dark'] .home-note { color:#a4aab0; background:rgba(255,255,255,.04); border-color:var(--app-line); }
+
+      html[data-theme='dark'] .auth-page { background:#111315; }
+      html[data-theme='dark'] .auth-aside { background:radial-gradient(circle at 72% 30%,#24272b,transparent 25%),linear-gradient(145deg,#151719,#202328); border-color:var(--app-line); }
+      html[data-theme='dark'] .auth-card { background:#191b1e; }
+      html[data-theme='dark'] .switch-auth { color:#9299a1; }
+      html[data-theme='dark'] .switch-auth button { color:#f4f5f6; }
+
+      html[data-theme='dark'] .public-shell { background:radial-gradient(circle at 78% 8%,color-mix(in srgb,var(--profile-primary,#fff) 8%,#191b1e),transparent 26%),#151719; }
+      html[data-theme='dark'] .public-nav { background:rgba(25,27,30,.88); border-color:var(--app-line); }
+      html[data-theme='dark'] .public-links a { color:#a8adb3; }
+      html[data-theme='dark'] .public-links a:hover { color:#fff; background:rgba(255,255,255,.06); }
+      html[data-theme='dark'] .profile-image::before { background:linear-gradient(145deg,#202328,#151719); border-color:var(--app-line); box-shadow:20px 25px 55px rgba(0,0,0,.3); }
+      html[data-theme='dark'] .profile-image .avatar { border-color:#202328; }
+      html[data-theme='dark'] .profile-specialty { color:#d5d8dc; }
+      html[data-theme='dark'] .profile-facts span { background:rgba(255,255,255,.04); border-color:var(--app-line); color:#b6bbc1; }
+      html[data-theme='dark'] .service-card { background:#191b1e; border-color:var(--app-line); box-shadow:0 7px 24px rgba(0,0,0,.2); }
+      html[data-theme='dark'] .service-card:hover { border-color:var(--app-line-strong); box-shadow:0 16px 36px rgba(0,0,0,.28); }
+      html[data-theme='dark'] .service-card p,
+      html[data-theme='dark'] .service-duration { color:#9da3aa; }
+      html[data-theme='dark'] .contact-strip { background:linear-gradient(135deg,#1d2023,#151719); border-color:var(--app-line); }
+      html[data-theme='dark'] .public-shell footer { border-color:var(--app-line); color:#777e86; }
+
+      html[data-theme='dark'] .booking-overlay { background:rgba(0,0,0,.56) !important; }
+      html[data-theme='dark'] .booking-panel { background:rgba(25,27,30,.97) !important; border-color:rgba(255,255,255,.12) !important; box-shadow:0 28px 80px rgba(0,0,0,.48) !important; }
+      html[data-theme='dark'] .booking-top { background:rgba(25,27,30,.92) !important; border-color:var(--app-line) !important; }
+      html[data-theme='dark'] .booking-top > div:nth-child(2) small,
+      html[data-theme='dark'] .selected-service span,
+      html[data-theme='dark'] .booking-heading p,
+      html[data-theme='dark'] .summary-mini p { color:#9299a1; }
+      html[data-theme='dark'] .selected-service,
+      html[data-theme='dark'] .summary-mini { background:linear-gradient(135deg,#202328,#191b1e); border-color:var(--app-line); box-shadow:none; }
+      html[data-theme='dark'] .selected-service button,
+      html[data-theme='dark'] .back-link { color:#b9bec4; }
+      html[data-theme='dark'] .date-grid button,
+      html[data-theme='dark'] .slot-grid button { background:#1b1e21; color:#c8cdd2; border-color:var(--app-line-strong); }
+      html[data-theme='dark'] .date-grid button.selected,
+      html[data-theme='dark'] .slot-grid button.selected { color:#111214; }
+      html[data-theme='dark'] .slot-area { background:#17191c; border-color:var(--app-line); }
+      html[data-theme='dark'] .booking-receipt { background:var(--app-line); border-color:var(--app-line); }
+      html[data-theme='dark'] .booking-receipt > div { background:#1c1f22; }
+      html[data-theme='dark'] .booking-receipt span { color:#858c94; }
+      html[data-theme='dark'] .confirmation > p { color:#9da3aa; }
+
+      html[data-theme='dark'] .dashboard-shell { background:#111315; }
+      html[data-theme='dark'] .sidebar { background:rgba(25,27,30,.9); border-color:var(--app-line); }
+      html[data-theme='dark'] .side-profile { background:rgba(255,255,255,.035); border-color:var(--app-line); }
+      html[data-theme='dark'] .side-profile span { color:#8e959d; }
+      html[data-theme='dark'] .sidebar nav a { color:#9da3aa; }
+      html[data-theme='dark'] .sidebar nav a:hover { color:#f4f5f6; background:rgba(255,255,255,.05); }
+      html[data-theme='dark'] .sidebar nav a.active { color:#fff; background:rgba(255,255,255,.08); }
+      html[data-theme='dark'] .sidebar nav a.active::before { background:#f4f5f6; }
+      html[data-theme='dark'] .logout { color:#9299a1; }
+      html[data-theme='dark'] .logout:hover { color:#ffb1b1; background:#321d1f; }
+      html[data-theme='dark'] .dashboard-top { background:rgba(17,19,21,.86); border-color:var(--app-line); }
+      html[data-theme='dark'] .top-kicker { color:#858c94; }
+      html[data-theme='dark'] .public-link { background:#1c1f22; color:#c4c9ce; border-color:var(--app-line); }
+      html[data-theme='dark'] .metric-card,
+      html[data-theme='dark'] .appointment-card,
+      html[data-theme='dark'] .service-admin,
+      html[data-theme='dark'] .block-row,
+      html[data-theme='dark'] .hour-row { background:#191b1e; border-color:var(--app-line); }
+      html[data-theme='dark'] .metric-card::after { background:#25282c; }
+      html[data-theme='dark'] .appointment-card:hover,
+      html[data-theme='dark'] .service-admin:hover,
+      html[data-theme='dark'] .block-row:hover,
+      html[data-theme='dark'] .hour-row:hover { border-color:var(--app-line-strong); box-shadow:0 9px 22px rgba(0,0,0,.22); }
+      html[data-theme='dark'] .tabs { background:#1b1e21; border-color:var(--app-line); }
+      html[data-theme='dark'] .tabs button { color:#949ba3; }
+      html[data-theme='dark'] .tabs button.active { color:#f4f5f6; background:#292c30; box-shadow:none; }
+      html[data-theme='dark'] .small-action { background:#202328; color:#c0c5ca; border-color:var(--app-line); }
+      html[data-theme='dark'] .small-action.danger { color:#ffadad; }
+      html[data-theme='dark'] .copy-field { background:#1b1e21; border-color:var(--app-line-strong); }
+      html[data-theme='dark'] .copy-field span { color:#a7adb4; }
+      html[data-theme='dark'] .copy-field button { background:#292c30; color:#e7e9eb; }
+      html[data-theme='dark'] .hours-row > div[style] > div { border-color:var(--app-line) !important; }
+      html[data-theme='dark'] .empty { background:rgba(255,255,255,.025); border-color:rgba(255,255,255,.14); }
+      html[data-theme='dark'] .empty-icon,
+      html[data-theme='dark'] .link-card-icon { background:#25282c; }
+      html[data-theme='dark'] .empty p { color:#858c94; }
+
+      .theme-toggle { flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; padding:0; border:1px solid var(--ui-line); border-radius:10px; background:rgba(255,255,255,.7); color:var(--ui-ink); cursor:pointer; transition:transform .18s ease,background .18s ease,border-color .18s ease; }
+      .theme-toggle:hover { transform:translateY(-1px); background:var(--app-surface); border-color:var(--ui-line-strong); }
+      .theme-toggle:active { transform:scale(.96); }
+      html[data-theme='dark'] .theme-toggle { background:#1c1f22; color:#f4f5f6; }
+      .theme-toggle-label { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+      @media (max-width: 900px) {
+        html[data-theme='dark'] .public-links { background:rgba(25,27,30,.98); border-color:var(--app-line); }
+      }
     `}</style>
   );
 }
@@ -3081,6 +3334,20 @@ function App() {
 }
 
 function AppContent() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = window.localStorage.getItem('agenda-theme');
+    return stored === 'dark' ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem('agenda-theme', theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((current) => (current === 'light' ? 'dark' : 'light'));
+  }
+
   const [session, setSession] = useState<{
     user: { id: string };
   } | null>(null);
@@ -3139,7 +3406,7 @@ function AppContent() {
 
   if (path.startsWith('/dashboard')) {
     return session ? (
-      <Dashboard userId={session.user.id} />
+      <Dashboard userId={session.user.id} onToggleTheme={toggleTheme} theme={theme} />
     ) : (
       <AuthPage />
     );
