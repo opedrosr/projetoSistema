@@ -2980,6 +2980,90 @@ function DesignSystem() {
         .hours-row > div[style] { grid-column:1 !important; }
       }
 
+
+      /* HARMONY / RESPONSIVE WIDTH PASS */
+      .dashboard-shell { grid-template-columns:240px minmax(0,1fr); }
+      .dashboard-content { width:min(1180px,calc(100% - 48px)); padding:32px 0 64px; }
+      .dashboard-top { padding-left:clamp(20px,3vw,40px); padding-right:clamp(20px,3vw,40px); }
+      .page-title { margin-bottom:24px; }
+      .page-title h1 { font-size:36px; }
+      .dashboard-section, .form-card, .hours-card, .link-card { border-radius:16px; }
+      .dashboard-section { padding:20px; }
+      .form-card { gap:15px; padding:20px; }
+      .overview-grid { gap:14px; margin-bottom:22px; }
+      .metric-card { min-height:120px; padding:18px; }
+      .appointment-list, .service-admin-list, .block-list { gap:9px; }
+      .appointment-card { grid-template-columns:82px minmax(0,1fr) auto; gap:16px; padding:14px; }
+      .appointment-time strong { font-size:18px; }
+      .appointment-info strong { font-size:11px; }
+      .two-column, .profile-settings-grid { gap:16px; }
+      .service-admin, .block-row { padding:14px 15px; }
+      .hours-row { grid-template-columns:155px minmax(0,1fr); gap:20px; padding:16px 18px; }
+      .quick-actions { gap:9px; margin-top:18px; }
+
+      .public-nav { width:min(1200px,calc(100% - 40px)); }
+      .profile-hero { width:min(1200px,calc(100% - 40px)); min-height:600px; grid-template-columns:minmax(300px,.85fr) minmax(0,1.15fr); gap:clamp(40px,6vw,90px); padding:64px 0 72px; }
+      .profile-image { min-height:390px; }
+      .profile-content h1 { max-width:760px; }
+      .public-section, .location-section, .contact-strip, .public-shell footer { width:min(1200px,calc(100% - 40px)); }
+      .public-section { padding:58px 0 72px; }
+      .section-heading { margin-bottom:22px; }
+      .service-list { gap:14px; }
+      .service-card { min-height:166px; padding:22px; gap:24px; }
+      .contact-strip { margin-top:8px; padding:26px 28px; }
+      .location-section { padding:68px 0 78px; }
+
+      .booking-panel { width:min(720px,100%); }
+      .booking-content { padding:26px !important; }
+      .date-grid { gap:7px; margin:20px 0 21px; }
+      .date-grid button { min-height:74px; }
+      .slot-area { padding:17px; }
+      .slot-grid { gap:8px; margin-top:11px; }
+      .slot-grid button { min-height:44px; }
+
+      @media (min-width: 1400px) {
+        .dashboard-content { width:min(1240px,calc(100% - 72px)); }
+        .public-nav, .profile-hero, .public-section, .location-section, .contact-strip, .public-shell footer { width:min(1280px,calc(100% - 72px)); }
+      }
+
+      @media (max-width: 900px) {
+        .dashboard-shell { grid-template-columns:1fr; }
+        .sidebar { position:fixed; inset:0 auto 0 0; width:min(270px,84vw); }
+        .profile-hero { grid-template-columns:1fr; min-height:auto; gap:28px; padding:52px 0 58px; text-align:center; }
+        .profile-content { margin:0 auto; }
+        .profile-facts { justify-content:center; }
+        .profile-image { min-height:300px; }
+      }
+
+      @media (max-width: 1100px) {
+        .dashboard-content { width:min(1100px,calc(100% - 36px)); }
+        .dashboard-shell { grid-template-columns:224px minmax(0,1fr); }
+        .profile-hero { gap:44px; }
+      }
+
+      @media (max-width: 640px) {
+        .dashboard-shell { grid-template-columns:1fr; }
+        .dashboard-content { width:calc(100% - 24px); padding:24px 0 44px; }
+        .dashboard-top { padding:9px 12px; }
+        .page-title { margin-bottom:18px; }
+        .page-title h1 { font-size:31px; }
+        .dashboard-section, .form-card { padding:16px; }
+        .overview-grid { gap:9px; margin-bottom:18px; }
+        .metric-card { min-height:104px; padding:15px; }
+        .appointment-card { grid-template-columns:64px minmax(0,1fr) auto; gap:10px; padding:12px; }
+        .hours-row { grid-template-columns:1fr; gap:10px; padding:14px 15px; }
+        .public-nav, .profile-hero, .public-section, .location-section, .contact-strip, .public-shell footer { width:calc(100% - 24px); }
+        .profile-hero { min-height:auto; gap:26px; padding:42px 0 48px; }
+        .profile-image { min-height:240px; }
+        .public-section { padding:44px 0 54px; }
+        .section-heading { margin-bottom:16px; }
+        .service-list { gap:10px; }
+        .service-card { min-height:145px; padding:17px; gap:16px; }
+        .contact-strip { padding:20px; }
+        .location-section { padding:48px 0 58px; }
+        .booking-content { padding:18px !important; }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
       }
