@@ -17,7 +17,7 @@ export async function getPublicProfile(slug: string) {
   if (error) throw error;
   if (!data) return null;
 
-  const [services, hours, blocks] = await Promise.all([
+  const [services, hours, blocks, availability] = await Promise.all([
     supabase
       .from('services')
       .select('*')
@@ -36,17 +36,33 @@ export async function getPublicProfile(slug: string) {
       .select('*')
       .eq('profile_id', data.id)
       .gte('ends_at', new Date().toISOString()),
+
+    supabase
+      .from('availability_slots')
+      .select('*')
+      .eq('profile_id', data.id)
+      .eq('active', true)
+      .order('day_of_week')
+      .order('start_time'),
   ]);
 
   if (services.error) throw services.error;
   if (hours.error) throw hours.error;
   if (blocks.error) throw blocks.error;
+  if (availability.error) throw availability.error;
 
   return {
     profile: data as Profile,
     services: services.data as Service[],
     hours: hours.data as BusinessHour[],
     blocks: blocks.data as BlockedTime[],
+    availability: availability.data as Array<{
+      id: string;
+      profile_id: string;
+      day_of_week: number;
+      start_time: string;
+      active: boolean;
+    }>,
   };
 }
 
@@ -56,6 +72,13 @@ export async function getAvailableSlots(
   serviceDuration: number,
   hours: BusinessHour[],
   blocks: BlockedTime[],
+  availability: Array<{
+    id: string;
+    profile_id: string;
+    day_of_week: number;
+    start_time: string;
+    active: boolean;
+  }> = [],
 ) {
   const weekday = new Date(`${date}T12:00:00`).getDay();
 
@@ -85,20 +108,27 @@ export async function getAvailableSlots(
   const end = new Date(`${date}T${day.end_time}`);
   const now = new Date();
 
+  const configuredSlots = availability
+    .filter(
+      (slot) =>
+        slot.profile_id === profileId &&
+        slot.day_of_week === weekday &&
+        slot.active,
+    )
+    .map((slot) => new Date(`${date}T${slot.start_time}`))
+    .filter((slot) => {
+      const slotEnd = new Date(
+        slot.getTime() + serviceDuration * 60000,
+      );
+      return (
+        slot >= start &&
+        slotEnd <= end
+      );
+    });
+
   const slots: string[] = [];
 
-  // Cada serviço define o intervalo entre os horários disponíveis.
-  // Ex.: serviço de 30 min -> 08:00, 08:30, 09:00...
-  // Serviço de 60 min -> 08:00, 09:00, 10:00...
-  // Serviço de 90 min -> 08:00, 09:30, 11:00...
-  for (
-    let cursor = new Date(start);
-    cursor.getTime() + serviceDuration * 60000 <=
-      end.getTime();
-    cursor = new Date(
-      cursor.getTime() + serviceDuration * 60000,
-    )
-  ) {
+  for (const cursor of configuredSlots) {
     const slotEnd = new Date(
       cursor.getTime() + serviceDuration * 60000,
     );
@@ -115,11 +145,11 @@ export async function getAvailableSlots(
         new Date(item.ends_at) > cursor,
     );
 
-    const conflicts =
-      appointmentConflicts ||
-      blockConflicts.length > 0;
-
-    if (cursor > now && !conflicts) {
+    if (
+      cursor > now &&
+      !appointmentConflicts &&
+      blockConflicts.length === 0
+    ) {
       slots.push(cursor.toTimeString().slice(0, 5));
     }
   }
@@ -204,6 +234,7 @@ export async function getOwnerData(userId: string) {
     hours,
     blocks,
     appointments,
+    availability,
   ] = await Promise.all([
     supabase
       .from('services')
@@ -228,6 +259,13 @@ export async function getOwnerData(userId: string) {
       .select('*, service:services(name)')
       .eq('profile_id', userId)
       .order('starts_at'),
+
+    supabase
+      .from('availability_slots')
+      .select('*')
+      .eq('profile_id', userId)
+      .order('day_of_week')
+      .order('start_time'),
   ]);
 
   const result = [
@@ -235,6 +273,7 @@ export async function getOwnerData(userId: string) {
     hours,
     blocks,
     appointments,
+    availability,
   ].find((item) => item.error);
 
   if (result?.error) {
@@ -246,7 +285,13 @@ export async function getOwnerData(userId: string) {
     services: services.data as Service[],
     hours: hours.data as BusinessHour[],
     blocks: blocks.data as BlockedTime[],
-    appointments:
-      appointments.data as Appointment[],
+    appointments: appointments.data as Appointment[],
+    availability: availability.data as Array<{
+      id: string;
+      profile_id: string;
+      day_of_week: number;
+      start_time: string;
+      active: boolean;
+    }>,
   };
 }

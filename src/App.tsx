@@ -209,6 +209,7 @@ function PublicPage({ slug }: { slug: string }) {
           selected.duration_minutes,
           data.hours,
           data.blocks,
+          data.availability,
         ),
       );
     } catch {
@@ -1751,31 +1752,169 @@ function Hours({
     React.SetStateAction<OwnerData | undefined>
   >;
 }) {
-  const initial = days.map(
+  const initialHours = days.map(
     (_, index) =>
       data.hours.find(
         (item) => item.day_of_week === index,
       ) || {
         profile_id: data.profile.id,
         day_of_week: index,
-        is_open: index > 0 && index < 6,
-        start_time: '09:00',
-        end_time: '18:00',
+        is_open: false,
+        start_time: '',
+        end_time: '',
       },
   );
 
-  const [hours, setHours] = useState(initial);
+  const [hours, setHours] = useState(initialHours);
+  const [slotsByDay, setSlotsByDay] = useState<string[][]>(
+    days.map((_, index) =>
+      data.availability
+        .filter((slot) => slot.day_of_week === index)
+        .map((slot) => slot.start_time.slice(0, 5)),
+    ),
+  );
+  const [saving, setSaving] = useState(false);
 
-  async function save() {
-    for (const hour of hours) {
-      await supabase
-        .from('business_hours')
-        .upsert(hour, {
-          onConflict: 'profile_id,day_of_week',
-        });
+  function updateHour(
+    index: number,
+    changes: Partial<(typeof hours)[number]>,
+  ) {
+    setHours((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, ...changes }
+          : item,
+      ),
+    );
+  }
+
+  function addSlot(dayIndex: number) {
+    const current = slotsByDay[dayIndex];
+    const fallback =
+      hours[dayIndex].start_time || '09:00';
+
+    if (current.includes(fallback)) {
+      return;
     }
 
-    setData({ ...data, hours });
+    setSlotsByDay((currentDays) =>
+      currentDays.map((slots, index) =>
+        index === dayIndex
+          ? [...slots, fallback].sort()
+          : slots,
+      ),
+    );
+  }
+
+  function updateSlot(
+    dayIndex: number,
+    slotIndex: number,
+    value: string,
+  ) {
+    setSlotsByDay((currentDays) =>
+      currentDays.map((slots, index) =>
+        index === dayIndex
+          ? slots
+              .map((slot, itemIndex) =>
+                itemIndex === slotIndex ? value : slot,
+              )
+              .filter(Boolean)
+              .sort()
+          : slots,
+      ),
+    );
+  }
+
+  function removeSlot(dayIndex: number, slotIndex: number) {
+    setSlotsByDay((currentDays) =>
+      currentDays.map((slots, index) =>
+        index === dayIndex
+          ? slots.filter(
+              (_, itemIndex) => itemIndex !== slotIndex,
+            )
+          : slots,
+      ),
+    );
+  }
+
+  async function save() {
+    setSaving(true);
+
+    try {
+      for (const hour of hours) {
+        const payload = {
+          profile_id: data.profile.id,
+          professional_id: data.profile.id,
+          day_of_week: hour.day_of_week,
+          is_open: hour.is_open,
+          active: hour.is_open,
+          start_time: hour.is_open
+            ? hour.start_time || null
+            : null,
+          end_time: hour.is_open
+            ? hour.end_time || null
+            : null,
+        };
+
+        const { error } = await supabase
+          .from('business_hours')
+          .upsert(payload, {
+            onConflict: 'profile_id,day_of_week',
+          });
+
+        if (error) throw error;
+      }
+
+      const { error: deleteError } = await supabase
+        .from('availability_slots')
+        .delete()
+        .eq('profile_id', data.profile.id);
+
+      if (deleteError) throw deleteError;
+
+      const rows = slotsByDay.flatMap(
+        (slots, dayIndex) =>
+          slots
+            .filter((time) => time)
+            .map((time) => ({
+              profile_id: data.profile.id,
+              day_of_week: dayIndex,
+              start_time: time,
+              active: true,
+            })),
+      );
+
+      let savedAvailability: typeof data.availability = [];
+
+      if (rows.length) {
+        const { data: inserted, error } = await supabase
+          .from('availability_slots')
+          .insert(rows)
+          .select('*')
+          .order('day_of_week')
+          .order('start_time');
+
+        if (error) throw error;
+        savedAvailability = inserted as typeof data.availability;
+      }
+
+      setData({
+        ...data,
+        hours: hours as typeof data.hours,
+        availability: savedAvailability,
+      });
+
+      window.alert('Horários salvos com sucesso.');
+    } catch (error) {
+      console.error('ERRO AO SALVAR HORÁRIOS:', error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível salvar os horários.',
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -1783,17 +1922,17 @@ function Hours({
       <div className="page-title">
         <div>
           <div className="eyebrow">
-            Quando você atende
+            Configure sua agenda
           </div>
           <h1>Horários</h1>
           <p>
-            Deixe claro quando suas clientes podem marcar.
+            Você define quando atende e quais horários suas clientes podem escolher.
           </p>
         </div>
 
-        <Button onClick={save}>
+        <Button onClick={save} disabled={saving}>
           <Check size={17} />
-          Salvar horários
+          {saving ? 'Salvando...' : 'Salvar horários'}
         </Button>
       </div>
 
@@ -1802,22 +1941,14 @@ function Hours({
           <div className="hours-row" key={index}>
             <div className="day-toggle">
               <button
+                type="button"
                 className={
                   hour.is_open ? 'toggle on' : 'toggle'
                 }
                 onClick={() =>
-                  setHours(
-                    hours.map(
-                      (item, itemIndex) =>
-                        itemIndex === index
-                          ? {
-                              ...item,
-                              is_open:
-                                !item.is_open,
-                            }
-                          : item,
-                    ),
-                  )
+                  updateHour(index, {
+                    is_open: !hour.is_open,
+                  })
                 }
               >
                 <i />
@@ -1832,18 +1963,9 @@ function Hours({
                   type="time"
                   value={hour.start_time || ''}
                   onChange={(event) =>
-                    setHours(
-                      hours.map(
-                        (item, itemIndex) =>
-                          itemIndex === index
-                            ? {
-                                ...item,
-                                start_time:
-                                  event.target.value,
-                              }
-                            : item,
-                      ),
-                    )
+                    updateHour(index, {
+                      start_time: event.target.value,
+                    })
                   }
                 />
 
@@ -1853,23 +1975,99 @@ function Hours({
                   type="time"
                   value={hour.end_time || ''}
                   onChange={(event) =>
-                    setHours(
-                      hours.map(
-                        (item, itemIndex) =>
-                          itemIndex === index
-                            ? {
-                                ...item,
-                                end_time:
-                                  event.target.value,
-                              }
-                            : item,
-                      ),
-                    )
+                    updateHour(index, {
+                      end_time: event.target.value,
+                    })
                   }
                 />
               </div>
             ) : (
               <span className="closed">Fechado</span>
+            )}
+
+            {hour.is_open && (
+              <div
+                style={{
+                  gridColumn: '1 / -1',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  marginTop: 8,
+                  paddingLeft: 44,
+                }}
+              >
+                <div>
+                  <strong style={{ fontSize: 13 }}>
+                    Horários que a cliente pode escolher
+                  </strong>
+                  <p
+                    style={{
+                      margin: '4px 0 10px',
+                      fontSize: 12,
+                      opacity: 0.65,
+                    }}
+                  >
+                    Cadastre os horários de início. A duração do serviço será aplicada automaticamente.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  {slotsByDay[index].map((slot, slotIndex) => (
+                    <div
+                      key={`${index}-${slotIndex}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <input
+                        type="time"
+                        value={slot}
+                        onChange={(event) =>
+                          updateSlot(
+                            index,
+                            slotIndex,
+                            event.target.value,
+                          )
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="Remover horário"
+                        onClick={() =>
+                          removeSlot(index, slotIndex)
+                        }
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    className="button button-soft"
+                    onClick={() => addSlot(index)}
+                  >
+                    <Plus size={15} />
+                    Adicionar horário
+                  </button>
+                </div>
+
+                {!slotsByDay[index].length && (
+                  <span className="closed">
+                    Nenhum horário de agendamento configurado.
+                  </span>
+                )}
+              </div>
             )}
           </div>
         ))}
