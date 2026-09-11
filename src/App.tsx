@@ -18,7 +18,6 @@ import {
   Plus,
   Scissors,
   Settings2,
-  Sparkles,
   Trash2,
   UserRound,
   Upload,
@@ -75,14 +74,22 @@ type CustomProfile = Profile & {
   logo_url?: string | null;
   description?: string | null;
   primary_color?: string | null;
+  pix_key?: string | null;
 };
 
 function customProfile(profile: Profile): CustomProfile {
   return profile as CustomProfile;
 }
 
-type PaymentService = Service & { requires_deposit?: boolean | null; deposit_amount?: number | null; };
-type PaymentProfile = CustomProfile & { pix_key?: string | null; };
+type PaymentService = Service & {
+  payment_type?: 'onsite' | 'deposit' | 'full' | null;
+  requires_deposit?: boolean | null;
+  deposit_amount?: number | null;
+};
+
+type PaymentProfile = CustomProfile & {
+  pix_key?: string | null;
+};
 
 function Button({
   children,
@@ -135,12 +142,7 @@ function Avatar({
 function Brand() {
   return (
     <a className="brand" href="/">
-      <span className="brand-mark">
-        <Sparkles size={15} />
-      </span>
-      <span>
-        agenda<span className="brand-dot">.</span>me
-      </span>
+      <span>Apenas agenda</span>
     </a>
   );
 }
@@ -293,11 +295,13 @@ function PublicPage({ slug }: { slug: string }) {
   if (confirmed) {
     const paymentSelected = selected as PaymentService | null;
     const paymentProfile = profile as PaymentProfile;
-    const requiresDeposit = Boolean(paymentSelected?.requires_deposit);
+    const paymentType = ((paymentSelected as PaymentService | null)?.payment_type || (paymentSelected?.requires_deposit ? (Number(paymentSelected?.deposit_amount || 0) >= Number(paymentSelected?.price || 0) ? 'full' : 'deposit') : 'onsite')) as 'onsite' | 'deposit' | 'full';
+    const requiresDeposit = paymentType !== 'onsite';
     const depositAmount = Number(paymentSelected?.deposit_amount || 0);
+    const isFullPayment = paymentType === 'full';
     const pixKey = paymentProfile.pix_key?.trim() || '';
     const whatsappMessage = requiresDeposit
-      ? `Olá! Agendei ${selected?.name} para ${booking.date ? formatDate(booking.date) : ''} às ${booking.time} e já fiz o pagamento do sinal.`
+      ? `Olá! Agendei ${selected?.name} para ${booking.date ? formatDate(booking.date) : ''} às ${booking.time} e já fiz o pagamento do ${isFullPayment ? 'serviço' : 'sinal'}.`
       : `Olá! Agendei ${selected?.name} para ${booking.date ? formatDate(booking.date) : ''} às ${booking.time}.`;
 
     return (
@@ -306,7 +310,7 @@ function PublicPage({ slug }: { slug: string }) {
         <main className="confirmation">
           <div className="success-mark"><Check size={30} /></div>
           <div className="eyebrow">{requiresDeposit ? 'Solicitação recebida' : 'Agendamento confirmado'}</div>
-          <h1>{requiresDeposit ? 'Falta apenas o sinal.' : 'Seu horário está reservado.'}</h1>
+          <h1>{requiresDeposit ? (isFullPayment ? 'Faça o pagamento do serviço.' : 'Falta apenas o sinal.') : 'Seu horário está reservado.'}</h1>
           <p>{requiresDeposit ? 'Faça o Pix abaixo e envie o comprovante pelo WhatsApp da profissional.' : 'Pronto. Enviamos todos os detalhes para você guardar.'}</p>
           <div className="booking-receipt">
             <div><span>Serviço</span><strong>{selected?.name}</strong></div>
@@ -316,7 +320,7 @@ function PublicPage({ slug }: { slug: string }) {
           {requiresDeposit && (
             <div className="pix-payment">
               <div className="pix-payment-top">
-                <div><span className="eyebrow">Sinal para reservar</span><h2>{formatCurrency(depositAmount)}</h2></div>
+                <div><span className="eyebrow">{isFullPayment ? 'Pagamento final' : 'Sinal para reservar'}</span><h2>{formatCurrency(depositAmount)}</h2></div>
                 <span className="pix-badge">Pix</span>
               </div>
               {pixKey ? (
@@ -330,7 +334,7 @@ function PublicPage({ slug }: { slug: string }) {
               ) : <div className="pix-missing">A profissional ainda não cadastrou a chave Pix. Entre em contato pelo WhatsApp para concluir a reserva.</div>}
             </div>
           )}
-          <a className="button button-primary" style={{ backgroundColor: primaryColor }} href={whatsappUrl(profile.whatsapp, whatsappMessage)} target="_blank" rel="noreferrer">
+          <a className="button button-primary" href={whatsappUrl(profile.whatsapp, whatsappMessage)} target="_blank" rel="noreferrer">
             <MessageCircle size={18} />
             {requiresDeposit ? 'Enviar comprovante pelo WhatsApp' : 'Falar com a profissional'}
           </a>
@@ -427,10 +431,13 @@ function PublicPage({ slug }: { slug: string }) {
                       {formatDuration(service.duration_minutes)}
                     </span>
 
-                    {(service as PaymentService).requires_deposit && (
+                    {(service as PaymentService).payment_type === 'deposit' && (
                       <span className="service-deposit">
                         Sinal de {formatCurrency(Number((service as PaymentService).deposit_amount || 0))}
                       </span>
+                    )}
+                    {(service as PaymentService).payment_type === 'full' && (
+                      <span className="service-deposit">Pagamento antecipado</span>
                     )}
                   </div>
 
@@ -549,14 +556,9 @@ function PublicNav({
               borderRadius: 10,
             }}
           />
-        ) : (
-          <span className="brand-mark">
-            <Sparkles size={15} />
-          </span>
-        )}
+        ) : null}
         <span>
-          {custom.business_name || 'agenda'}
-          {!custom.business_name && <span className="brand-dot">.</span>}
+          {custom.business_name || 'Apenas agenda'}
         </span>
       </a>
 
@@ -831,9 +833,9 @@ function BookingDrawer({
 
             {selected && (selected as PaymentService).requires_deposit && (
               <div className="booking-deposit-note">
-                <span>Sinal para reservar</span>
+                <span>{Number((selected as PaymentService).deposit_amount || 0) >= Number(selected.price || 0) ? 'Pagamento final' : 'Sinal para reservar'}</span>
                 <strong>{formatCurrency(Number((selected as PaymentService).deposit_amount || 0))}</strong>
-                <p>Após reservar, você verá a chave Pix da profissional e poderá enviar o comprovante pelo WhatsApp.</p>
+                <p>Após confirmar, você verá a chave Pix da profissional e poderá enviar o comprovante pelo WhatsApp.</p>
               </div>
             )}
 
@@ -1029,7 +1031,7 @@ function DashboardLayout({
               onClick={() => setMobileNav(false)}
             >
               {label === 'Início' ? (
-                <Sparkles size={17} />
+                <CalendarDays size={17} />
               ) : label === 'Agendamentos' ? (
                 <CalendarDays size={17} />
               ) : label === 'Serviços' ? (
@@ -1429,69 +1431,83 @@ function Appointments({
 
 function Services({
   data,
-  setData
+  setData,
 }: {
   data: NonNullable<OwnerData>;
-  setData: React.Dispatch<
-    React.SetStateAction<OwnerData | undefined>
-  >;
+  setData: React.Dispatch<React.SetStateAction<OwnerData | undefined>>;
 }) {
   const [form, setForm] = useState({
     name: '',
     description: '',
     price: '',
     duration_minutes: '60',
-    requires_deposit: false,
+    payment_type: 'onsite' as 'onsite' | 'deposit' | 'full',
     deposit_amount: '',
   });
+  const [editing, setEditing] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const [editing, setEditing] = useState<string | null>(
-    null,
-  );
+  function resetForm() {
+    setForm({
+      name: '',
+      description: '',
+      price: '',
+      duration_minutes: '60',
+      payment_type: 'onsite',
+      deposit_amount: '',
+    });
+    setEditing(null);
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (saving) return;
+
+    const price = Number(form.price);
+    const duration = Number(form.duration_minutes);
+    const deposit = Number(form.deposit_amount);
+
+    if (!form.name.trim()) {
+      window.alert('Informe o nome do serviço.');
+      return;
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      window.alert('Informe um preço válido.');
+      return;
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
+      window.alert('Informe uma duração válida.');
+      return;
+    }
+    if (form.payment_type === 'deposit') {
+      if (!Number.isFinite(deposit) || deposit <= 0) {
+        window.alert('Informe um valor de sinal maior que zero.');
+        return;
+      }
+      if (deposit > price) {
+        window.alert('O sinal não pode ser maior que o preço do serviço.');
+        return;
+      }
+    }
+
+    setSaving(true);
 
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
-      price: Number(form.price),
-      duration_minutes: Number(form.duration_minutes),
+      price,
+      duration_minutes: duration,
       profile_id: data.profile.id,
       is_active: true,
-      requires_deposit: form.requires_deposit,
-      deposit_amount: form.requires_deposit ? Number(form.deposit_amount) : null,
+      payment_type: form.payment_type,
+      requires_deposit: form.payment_type !== 'onsite',
+      deposit_amount:
+        form.payment_type === 'full'
+          ? price
+          : form.payment_type === 'deposit'
+            ? deposit
+            : null,
     };
-
-    if (!payload.name) {
-      alert('Informe o nome do serviço.');
-      return;
-    }
-
-    if (!Number.isFinite(payload.price) || payload.price < 0) {
-      alert('Informe um preço válido.');
-      return;
-    }
-
-    if (
-      !Number.isFinite(payload.duration_minutes) ||
-      payload.duration_minutes <= 0
-    ) {
-      alert('Informe uma duração válida.');
-      return;
-    }
-
-    const deposit = Number(form.deposit_amount);
-    if (form.requires_deposit && (!Number.isFinite(deposit) || deposit <= 0)) {
-      alert('Informe um valor de sinal maior que zero.');
-      return;
-    }
-    if (form.requires_deposit && deposit > payload.price) {
-      alert('O sinal não pode ser maior que o preço do serviço.');
-      return;
-    }
-
-    console.log('SALVANDO SERVIÇO:', payload);
 
     try {
       const result = editing
@@ -1499,6 +1515,7 @@ function Services({
             .from('services')
             .update(payload)
             .eq('id', editing)
+            .eq('profile_id', data.profile.id)
             .select()
             .maybeSingle()
         : await supabase
@@ -1507,90 +1524,50 @@ function Services({
             .select()
             .maybeSingle();
 
-      console.log('RESPOSTA DO SUPABASE - SERVIÇO:', result);
-
-      if (result.error) {
-        console.error('ERRO AO SALVAR SERVIÇO:', result.error);
-        alert(`Erro ao salvar serviço: ${result.error.message}`);
-        return;
-      }
-
-      if (!result.data) {
-        console.error(
-          'SERVIÇO NÃO RETORNADO PELO SUPABASE:',
-          result,
-        );
-        alert('O serviço não foi retornado pelo Supabase.');
-        return;
-      }
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error('O serviço não foi retornado pelo Supabase.');
 
       const savedService = result.data as Service;
-
       setData({
         ...data,
         services: editing
-          ? data.services.map((item) =>
-              item.id === editing ? savedService : item,
-            )
+          ? data.services.map((item) => item.id === editing ? savedService : item)
           : [...data.services, savedService],
       });
-
-      setForm({
-        name: '',
-        description: '',
-        price: '',
-        duration_minutes: '60',
-        requires_deposit: false,
-        deposit_amount: '',
-      });
-
-      setEditing(null);
-    } catch (err) {
-      console.error(
-        'ERRO INESPERADO AO SALVAR SERVIÇO:',
-        err,
-      );
-
-      const message =
-        err instanceof Error ? err.message : String(err);
-
-      alert(`Erro ao salvar serviço: ${message}`);
+      resetForm();
+    } catch (error) {
+      console.error('ERRO AO SALVAR SERVIÇO:', error);
+      window.alert(error instanceof Error ? error.message : 'Não foi possível salvar o serviço.');
+    } finally {
+      setSaving(false);
     }
   }
 
-
   async function remove(id: string) {
-    if (!window.confirm('Excluir este serviço?')) {
-      return;
-    }
+    if (!window.confirm('Excluir este serviço?')) return;
 
     const { error } = await supabase
       .from('services')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('profile_id', data.profile.id);
 
-    if (!error) {
-      setData({
-        ...data,
-        services: data.services.filter(
-          (item) => item.id !== id,
-        ),
-      });
+    if (error) {
+      window.alert(`Não foi possível excluir: ${error.message}`);
+      return;
     }
+
+    setData({ ...data, services: data.services.filter((item) => item.id !== id) });
+    if (editing === id) resetForm();
   }
 
   return (
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">
-            O que você oferece
-          </div>
+          <div className="eyebrow">O que você oferece</div>
           <h1>Serviços</h1>
-          <p>
-            Mostre suas opções de forma clara para suas
-            clientes.
-          </p>
+          <p>Mostre suas opções de forma clara para suas clientes.</p>
         </div>
       </div>
 
@@ -1603,329 +1580,205 @@ function Services({
 
           {data.services.length ? (
             <div className="service-admin-list">
-              {data.services.map((service) => (
-                <div
-                  className={`service-admin ${
-                    !service.is_active ? 'inactive' : ''
-                  }`}
-                  key={service.id}
-                >
-                  <div>
-                    <strong>{service.name}</strong>
-                    <span>
-                      {formatCurrency(service.price)} ·{' '}
-                      {formatDuration(
-                        service.duration_minutes,
-                      )}
-                      {(service as PaymentService).requires_deposit
-                        ? ` · Sinal de ${formatCurrency(Number((service as PaymentService).deposit_amount || 0))}`
-                        : ''}
-                    </span>
+              {data.services.map((service) => {
+                const item = service as PaymentService;
+                const type = item.payment_type || (item.requires_deposit ? 'deposit' : 'onsite');
+                return (
+                  <div className={`service-admin ${!service.is_active ? 'inactive' : ''}`} key={service.id}>
+                    <div>
+                      <strong>{service.name}</strong>
+                      <span>
+                        {formatCurrency(service.price)} · {formatDuration(service.duration_minutes)}
+                        {type === 'deposit' && item.deposit_amount != null ? ` · Sinal de ${formatCurrency(item.deposit_amount)}` : ''}
+                        {type === 'full' ? ' · Pagamento antecipado' : ''}
+                      </span>
+                    </div>
+                    <div>
+                      <button
+                        className="small-action"
+                        type="button"
+                        onClick={() => {
+                          setEditing(service.id);
+                          setForm({
+                            name: service.name,
+                            description: service.description || '',
+                            price: String(service.price),
+                            duration_minutes: String(service.duration_minutes),
+                            payment_type: type as 'onsite' | 'deposit' | 'full',
+                            deposit_amount: item.deposit_amount != null && type === 'deposit' ? String(item.deposit_amount) : '',
+                          });
+                        }}
+                      >Editar</button>
+                      <button className="small-action danger" type="button" onClick={() => remove(service.id)}>
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
-
-                  <div>
-                    <button
-                      className="small-action"
-                      onClick={() => {
-                        setEditing(service.id);
-                        setForm({
-                          name: service.name,
-                          description:
-                            service.description,
-                          price: String(service.price),
-                          duration_minutes: String(
-                            service.duration_minutes,
-                          ),
-                          requires_deposit: Boolean((service as PaymentService).requires_deposit),
-                          deposit_amount: (service as PaymentService).deposit_amount != null
-                            ? String((service as PaymentService).deposit_amount)
-                            : '',
-                        });
-                      }}
-                    >
-                      Editar
-                    </button>
-
-                    <button
-                      className="small-action danger"
-                      onClick={() =>
-                        remove(service.id)
-                      }
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <Empty
-              title="Nenhum serviço cadastrado"
-              text="Adicione seu primeiro serviço para começar."
-            />
+            <Empty title="Nenhum serviço cadastrado" text="Adicione seu primeiro serviço para começar." />
           )}
         </section>
 
         <form className="form-card" onSubmit={save}>
           <div className="section-heading">
-            <h2>
-              {editing
-                ? 'Editar serviço'
-                : 'Novo serviço'}
-            </h2>
-
-            {editing && (
-              <button
-                type="button"
-                className="text-link"
-                onClick={() => {
-                  setEditing(null);
-
-  setForm({
-  name: '',
-  description: '',
-  price: '',
-  duration_minutes: '60',
-  requires_deposit: false,
-  deposit_amount: '',
-});
-                }}
-              >
-                Cancelar
-              </button>
-            )}
+            <h2>{editing ? 'Editar serviço' : 'Novo serviço'}</h2>
+            {editing && <button type="button" className="text-link" onClick={resetForm}>Cancelar</button>}
           </div>
 
-          <Field
-            label="Nome do serviço"
-            placeholder="Ex.: Corte e finalização"
-            value={form.name}
-            onChange={(event) =>
-              setForm({
-                ...form,
-                name: event.target.value,
-              })
-            }
-            required
-          />
+          <Field label="Nome do serviço" placeholder="Ex.: Corte e finalização" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
 
           <label className="field">
-            <span>
-              Descrição <em>Opcional</em>
-            </span>
-
-            <textarea
-              placeholder="Descreva brevemente o serviço"
-              value={form.description}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  description: event.target.value,
-                })
-              }
-            />
+            <span>Descrição <em>Opcional</em></span>
+            <textarea placeholder="Descreva brevemente o serviço" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
           </label>
 
           <div className="form-row">
-            <Field
-              label="Preço"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0,00"
-              value={form.price}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  price: event.target.value,
-                })
-              }
-              required
-            />
-
+            <Field label="Preço" type="number" min="0" step="0.01" placeholder="0,00" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} required />
             <label className="field">
               <span>Duração</span>
-
-              <select
-                value={form.duration_minutes}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    duration_minutes:
-                      event.target.value,
-                  })
-                }
-              >
-                <option value="30">
-                  30 minutos
-                </option>
-                <option value="60">
-                  1 hora
-                </option>
-                <option value="90">
-                  1h30
-                </option>
-                <option value="120">
-                  2 horas
-                </option>
-                <option value="150">
-                  2h30
-                </option>
-                <option value="180">
-                  3 horas
-                </option>
+              <select value={form.duration_minutes} onChange={(event) => setForm({ ...form, duration_minutes: event.target.value })}>
+                <option value="30">30 minutos</option>
+                <option value="60">1 hora</option>
+                <option value="90">1h30</option>
+                <option value="120">2 horas</option>
+                <option value="150">2h30</option>
+                <option value="180">3 horas</option>
               </select>
             </label>
           </div>
 
-
           <div className="service-payment-settings">
-            <div className="service-payment-heading">
-              <div><span className="eyebrow">Pagamento</span><h3>Sinal para reservar</h3></div>
-              <button type="button" className={`toggle ${form.requires_deposit ? 'on' : ''}`} onClick={() => setForm({ ...form, requires_deposit: !form.requires_deposit, deposit_amount: !form.requires_deposit ? form.deposit_amount : '' })} aria-label={form.requires_deposit ? 'Desativar sinal' : 'Ativar sinal'}><i /></button>
+            <div>
+              <h3>Pagamento do serviço</h3>
+              <p>Defina o que a cliente precisa pagar para reservar.</p>
             </div>
-            <p>{form.requires_deposit ? 'A cliente deverá pagar este valor via Pix para reservar.' : 'A cliente paga diretamente no atendimento.'}</p>
-            {form.requires_deposit && <Field label="Valor do sinal" type="number" min="0.01" step="0.01" placeholder="0,00" value={form.deposit_amount} onChange={(event) => setForm({ ...form, deposit_amount: event.target.value })} required />}
-          </div>
-          <Button type="submit">
-            {editing ? (
-              'Salvar alterações'
-            ) : (
-              <>
-                <Plus size={17} />
-                Adicionar serviço
-              </>
+            <label className="field">
+              <span>Forma de pagamento</span>
+              <select value={form.payment_type} onChange={(event) => setForm({ ...form, payment_type: event.target.value as 'onsite' | 'deposit' | 'full' })}>
+                <option value="onsite">Pagar no ato do serviço</option>
+                <option value="deposit">Pagar um sinal para reservar</option>
+                <option value="full">Pagar o valor completo antecipadamente</option>
+              </select>
+            </label>
+            {form.payment_type === 'deposit' && (
+              <Field label="Valor do sinal" type="number" min="0.01" step="0.01" placeholder="0,00" value={form.deposit_amount} onChange={(event) => setForm({ ...form, deposit_amount: event.target.value })} required />
             )}
-          </Button>
+            {form.payment_type === 'full' && (
+              <div className="payment-final-value">
+                <span>Valor cobrado antecipadamente</span>
+                <strong>{form.price ? formatCurrency(Number(form.price)) : 'R$ 0,00'}</strong>
+                <small>A cliente verá o valor completo na confirmação.</small>
+              </div>
+            )}
+          </div>
+
+          <Button type="submit" disabled={saving}>{saving ? 'Salvando...' : editing ? 'Salvar alterações' : <><Plus size={17} />Adicionar serviço</>}</Button>
         </form>
       </div>
     </>
   );
 }
 
+
 function Hours({
   data,
-  setData
+  setData,
 }: {
   data: NonNullable<OwnerData>;
-  setData: React.Dispatch<
-    React.SetStateAction<OwnerData | undefined>
-  >;
+  setData: React.Dispatch<React.SetStateAction<OwnerData | undefined>>;
 }) {
-  const initialHours = days.map(
-    (_, index) =>
-      data.hours.find(
-        (item) => item.day_of_week === index,
-      ) || {
-        profile_id: data.profile.id,
-        day_of_week: index,
-        is_open: false,
-        start_time: '',
-        end_time: '',
-      },
-  );
+  type LocalHour = {
+    profile_id: string;
+    day_of_week: number;
+    is_open: boolean;
+    start_time: string | null;
+    end_time: string | null;
+  };
 
-  const [hours, setHours] = useState(initialHours);
-  const [slotsByDay, setSlotsByDay] = useState<string[][]>(
-    days.map((_, index) =>
-      data.availability
-        .filter((slot) => slot.day_of_week === index)
-        .map((slot) => slot.start_time.slice(0, 5))
-        .sort(),
-    ),
-  );
-  const [newSlotByDay, setNewSlotByDay] = useState<string[]>(
-    days.map(() => ''),
-  );
+  const initialHours: LocalHour[] = days.map((_, index) => {
+    const existing = data.hours.find((item) => item.day_of_week === index);
+    return existing
+      ? {
+          profile_id: data.profile.id,
+          day_of_week: index,
+          is_open: Boolean(existing.is_open),
+          start_time: existing.start_time || null,
+          end_time: existing.end_time || null,
+        }
+      : {
+          profile_id: data.profile.id,
+          day_of_week: index,
+          is_open: false,
+          start_time: null,
+          end_time: null,
+        };
+  });
+
+  const [hours, setHours] = useState<LocalHour[]>(initialHours);
+  const [interval, setInterval] = useState(() => {
+    const slots = data.availability.map((slot) => slot.start_time.slice(0, 5)).sort();
+    for (let i = 1; i < slots.length; i += 1) {
+      const [h1, m1] = slots[i - 1].split(':').map(Number);
+      const [h2, m2] = slots[i].split(':').map(Number);
+      const diff = h2 * 60 + m2 - (h1 * 60 + m1);
+      if (diff > 0 && [15, 30, 45, 60, 90, 120].includes(diff)) return String(diff);
+    }
+    return '30';
+  });
   const [saving, setSaving] = useState(false);
 
-  function updateHour(
-    index: number,
-    changes: Partial<(typeof hours)[number]>,
-  ) {
-    setHours((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index
-          ? { ...item, ...changes }
-          : item,
-      ),
-    );
+  function updateHour(index: number, changes: Partial<LocalHour>) {
+    setHours((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item));
   }
 
-  function addSlot(dayIndex: number) {
-    const value = newSlotByDay[dayIndex];
-    if (!value) return;
-
-    const hour = hours[dayIndex];
-    const current = slotsByDay[dayIndex];
-
-    if (!hour.is_open) return;
-
-    if (hour.start_time && value < hour.start_time) {
-      window.alert('Esse horário está antes do início do atendimento.');
-      return;
+  function generateSlots(startTime: string | null, endTime: string | null, stepMinutes: number) {
+    if (!startTime || !endTime || !Number.isFinite(stepMinutes) || stepMinutes <= 0) return [];
+    const [startHour, startMinute] = startTime.slice(0, 5).split(':').map(Number);
+    const [endHour, endMinute] = endTime.slice(0, 5).split(':').map(Number);
+    const start = startHour * 60 + startMinute;
+    const end = endHour * 60 + endMinute;
+    const result: string[] = [];
+    for (let minutes = start; minutes < end; minutes += stepMinutes) {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      result.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     }
-
-    if (hour.end_time && value >= hour.end_time) {
-      window.alert('Esse horário está fora do horário de atendimento.');
-      return;
-    }
-
-    if (current.includes(value)) {
-      window.alert('Esse horário já foi adicionado.');
-      return;
-    }
-
-    setSlotsByDay((currentDays) =>
-      currentDays.map((slots, index) =>
-        index === dayIndex ? [...slots, value].sort() : slots,
-      ),
-    );
-
-    setNewSlotByDay((currentValues) =>
-      currentValues.map((time, index) =>
-        index === dayIndex ? '' : time,
-      ),
-    );
-  }
-
-  function removeSlot(dayIndex: number, slotIndex: number) {
-    setSlotsByDay((currentDays) =>
-      currentDays.map((slots, index) =>
-        index === dayIndex
-          ? slots.filter(
-              (_, itemIndex) => itemIndex !== slotIndex,
-            )
-          : slots,
-      ),
-    );
+    return result;
   }
 
   async function save() {
+    if (saving) return;
     setSaving(true);
-
     try {
+      const stepMinutes = Number(interval);
+      if (!Number.isFinite(stepMinutes) || ![15, 30, 45, 60, 90, 120].includes(stepMinutes)) {
+        throw new Error('Escolha um intervalo válido.');
+      }
+
       for (const hour of hours) {
+        if (hour.is_open && (!hour.start_time || !hour.end_time)) {
+          throw new Error(`Informe o início e o fim de ${days[hour.day_of_week]}.`);
+        }
+        if (hour.is_open && hour.start_time && hour.end_time && hour.start_time >= hour.end_time) {
+          throw new Error(`O horário final deve ser depois do início em ${days[hour.day_of_week]}.`);
+        }
+
         const payload = {
           profile_id: data.profile.id,
           professional_id: data.profile.id,
           day_of_week: hour.day_of_week,
           is_open: hour.is_open,
           active: hour.is_open,
-          start_time: hour.is_open
-            ? hour.start_time || null
-            : null,
-          end_time: hour.is_open
-            ? hour.end_time || null
-            : null,
+          start_time: hour.is_open ? hour.start_time : null,
+          end_time: hour.is_open ? hour.end_time : null,
         };
 
         const { error } = await supabase
           .from('business_hours')
-          .upsert(payload, {
-            onConflict: 'profile_id,day_of_week',
-          });
-
+          .upsert(payload, { onConflict: 'profile_id,day_of_week' });
         if (error) throw error;
       }
 
@@ -1933,24 +1786,20 @@ function Hours({
         .from('availability_slots')
         .delete()
         .eq('profile_id', data.profile.id);
-
       if (deleteError) throw deleteError;
 
-      const rows = slotsByDay.flatMap(
-        (slots, dayIndex) =>
-          [...slots]
-            .filter(Boolean)
-            .sort()
-            .map((time) => ({
+      const rows = hours.flatMap((hour) =>
+        hour.is_open
+          ? generateSlots(hour.start_time, hour.end_time, stepMinutes).map((time) => ({
               profile_id: data.profile.id,
-              day_of_week: dayIndex,
+              day_of_week: hour.day_of_week,
               start_time: time,
               active: true,
-            })),
+            }))
+          : [],
       );
 
       let savedAvailability: typeof data.availability = [];
-
       if (rows.length) {
         const { data: inserted, error } = await supabase
           .from('availability_slots')
@@ -1958,25 +1807,15 @@ function Hours({
           .select('*')
           .order('day_of_week')
           .order('start_time');
-
         if (error) throw error;
-        savedAvailability = inserted as typeof data.availability;
+        savedAvailability = (inserted || []) as typeof data.availability;
       }
 
-      setData({
-        ...data,
-        hours: hours as typeof data.hours,
-        availability: savedAvailability,
-      });
-
+      setData({ ...data, hours: hours as typeof data.hours, availability: savedAvailability });
       window.alert('Horários salvos com sucesso.');
     } catch (error) {
       console.error('ERRO AO SALVAR HORÁRIOS:', error);
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível salvar os horários.',
-      );
+      window.alert(error instanceof Error ? error.message : 'Não foi possível salvar os horários.');
     } finally {
       setSaving(false);
     }
@@ -1986,202 +1825,57 @@ function Hours({
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">
-            Configure sua agenda
-          </div>
+          <div className="eyebrow">Configure sua agenda</div>
           <h1>Horários</h1>
-          <p>
-            Defina quando você atende e quais horários suas clientes podem escolher.
-          </p>
+          <p>Defina seu horário de atendimento e o intervalo entre os horários disponíveis.</p>
         </div>
-
-        <Button onClick={save} disabled={saving}>
-          <Check size={17} />
-          {saving ? 'Salvando...' : 'Salvar horários'}
-        </Button>
+        <Button onClick={save} disabled={saving}><Check size={17} />{saving ? 'Salvando...' : 'Salvar horários'}</Button>
       </div>
 
       <section className="hours-card">
-        {hours.map((hour, index) => (
-          <div className="hours-row" key={index}>
-            <div className="day-toggle">
-              <button
-                type="button"
-                className={
-                  hour.is_open ? 'toggle on' : 'toggle'
-                }
-                onClick={() =>
-                  updateHour(index, {
-                    is_open: !hour.is_open,
-                  })
-                }
-              >
-                <i />
-              </button>
-
-              <strong>{days[index]}</strong>
-            </div>
-
-            {hour.is_open ? (
-              <div className="time-inputs">
-                <input
-                  type="time"
-                  value={hour.start_time || ''}
-                  onChange={(event) =>
-                    updateHour(index, {
-                      start_time: event.target.value,
-                    })
-                  }
-                />
-
-                <span>até</span>
-
-                <input
-                  type="time"
-                  value={hour.end_time || ''}
-                  onChange={(event) =>
-                    updateHour(index, {
-                      end_time: event.target.value,
-                    })
-                  }
-                />
-              </div>
-            ) : (
-              <span className="closed">Fechado</span>
-            )}
-
-            {hour.is_open && (
-              <div
-                style={{
-                  gridColumn: '1 / -1',
-                  marginTop: 8,
-                  paddingLeft: 44,
-                }}
-              >
-                <div
-                  style={{
-                    borderTop: '1px solid rgba(0,0,0,.08)',
-                    paddingTop: 14,
-                  }}
-                >
-                  <strong style={{ fontSize: 13 }}>
-                    Horários disponíveis para clientes
-                  </strong>
-                  <p
-                    style={{
-                      margin: '4px 0 12px',
-                      fontSize: 12,
-                      opacity: 0.65,
-                    }}
-                  >
-                    Adicione apenas os horários em que uma cliente pode começar um atendimento.
-                  </p>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 8,
-                      alignItems: 'center',
-                    }}
-                  >
-                    {slotsByDay[index].map((slot, slotIndex) => (
-                      <div
-                        key={`${index}-${slot}-${slotIndex}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 7,
-                          padding: '7px 9px 7px 11px',
-                          border: '1px solid rgba(0,0,0,.10)',
-                          borderRadius: 999,
-                          background: 'rgba(0,0,0,.025)',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            fontVariantNumeric: 'tabular-nums',
-                          }}
-                        >
-                          {slot}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label={`Remover horário ${slot}`}
-                          onClick={() =>
-                            removeSlot(index, slotIndex)
-                          }
-                          style={{
-                            border: 0,
-                            background: 'transparent',
-                            padding: 2,
-                            display: 'grid',
-                            placeItems: 'center',
-                            cursor: 'pointer',
-                            opacity: 0.6,
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 7,
-                      }}
-                    >
-                      <input
-                        type="time"
-                        value={newSlotByDay[index]}
-                        onChange={(event) =>
-                          setNewSlotByDay((currentValues) =>
-                            currentValues.map((time, itemIndex) =>
-                              itemIndex === index
-                                ? event.target.value
-                                : time,
-                            ),
-                          )
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            addSlot(index);
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="button button-soft"
-                        onClick={() => addSlot(index)}
-                      >
-                        <Plus size={15} />
-                        Adicionar
-                      </button>
-                    </div>
-                  </div>
-
-                  {!slotsByDay[index].length && (
-                    <span
-                      className="closed"
-                      style={{ display: 'block', marginTop: 10 }}
-                    >
-                      Nenhum horário adicionado ainda.
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+        <div className="hours-settings">
+          <div>
+            <strong>Intervalo dos horários</strong>
+            <p>O sistema cria automaticamente os horários dentro do seu período de atendimento.</p>
           </div>
-        ))}
+          <label className="field interval-field">
+            <span>Intervalo</span>
+            <select value={interval} onChange={(event) => setInterval(event.target.value)}>
+              <option value="15">15 minutos</option>
+              <option value="30">30 minutos</option>
+              <option value="45">45 minutos</option>
+              <option value="60">1 hora</option>
+              <option value="90">1h30</option>
+              <option value="120">2 horas</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="hours-list">
+          {hours.map((hour, index) => (
+            <div className="hours-row" key={hour.day_of_week}>
+              <div className="day-toggle">
+                <button type="button" className={hour.is_open ? 'toggle on' : 'toggle'} onClick={() => updateHour(index, { is_open: !hour.is_open })}><i /></button>
+                <strong>{days[index]}</strong>
+              </div>
+              {hour.is_open ? (
+                <div className="time-inputs">
+                  <input type="time" value={hour.start_time || ''} onChange={(event) => updateHour(index, { start_time: event.target.value || null })} />
+                  <span>até</span>
+                  <input type="time" value={hour.end_time || ''} onChange={(event) => updateHour(index, { end_time: event.target.value || null })} />
+                </div>
+              ) : <span className="closed">Fechado</span>}
+              {hour.is_open && hour.start_time && hour.end_time && hour.start_time < hour.end_time && (
+                <span className="hours-preview">{generateSlots(hour.start_time, hour.end_time, Number(interval)).length} horários · a cada {interval} min</span>
+              )}
+            </div>
+          ))}
+        </div>
       </section>
     </>
   );
 }
+
 
 function Blocks({
   data,
@@ -2389,7 +2083,7 @@ function ProfileSettings({
   data: NonNullable<OwnerData>;
   setData: React.Dispatch<React.SetStateAction<OwnerData | undefined>>;
 }) {
-  const [form, setForm] = useState<PaymentProfile>(customProfile(data.profile) as PaymentProfile);
+  const [form, setForm] = useState<CustomProfile>(customProfile(data.profile));
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState<'logo' | 'avatar' | null>(null);
   const [error, setError] = useState('');
@@ -2477,7 +2171,7 @@ function ProfileSettings({
         state: form.state,
         description: form.description || '',
         primary_color: primaryColor,
-        pix_key: form.pix_key?.trim() || null,
+        pix_key: form.pix_key || '',
       })
       .eq('id', form.id)
       .select()
@@ -2622,6 +2316,13 @@ function ProfileSettings({
           </div>
 
           <Field
+            label="Chave Pix"
+            placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+            value={form.pix_key || ''}
+            onChange={(event) => setForm({ ...form, pix_key: event.target.value })}
+          />
+
+          <Field
             label="Endereço"
             placeholder="Rua, número"
             value={form.address}
@@ -2643,14 +2344,6 @@ function ProfileSettings({
               onChange={(event) => setForm({ ...form, state: event.target.value.toUpperCase() })}
             />
           </div>
-
-          <Field
-            label="Chave Pix"
-            placeholder="CPF, celular, e-mail ou chave aleatória"
-            value={form.pix_key || ''}
-            onChange={(event) => setForm({ ...form, pix_key: event.target.value })}
-          />
-          <div className="field-help">Essa chave será usada pelas suas clientes quando um serviço exigir sinal.</div>
 
           <label className="field">
             <span><Palette size={15} /> Cor principal</span>
@@ -3403,6 +3096,68 @@ function DesignSystem() {
 
       @media (max-width: 900px) {
         html[data-theme='dark'] .public-links { background:rgba(25,27,30,.98); border-color:var(--app-line); }
+      }
+      /* FINAL PRODUCT UI — less decoration, more system */
+      .brand { text-decoration:none !important; }
+      .brand-mark, .brand-dot { display:none !important; }
+      .profile-image::before { display:none !important; }
+      .button::after { display:none !important; }
+      .button, .button-soft, .button-primary, .button-dark, .button-danger,
+      .small-action, .tabs, .tabs button, .field input, .field textarea, .field select,
+      .time-inputs input, .hours-row input[type='time'], .copy-field, .service-card,
+      .contact-strip, .selected-service, .summary-mini, .date-grid button, .slot-grid button,
+      .dashboard-section, .form-card, .hours-card, .link-card, .metric-card,
+      .appointment-card, .service-admin, .block-row, .hour-row, .sidebar,
+      .public-nav, .pix-payment, .booking-deposit-note, .service-payment-settings {
+        box-shadow:none !important;
+      }
+      .button:hover, .small-action:hover, .date-grid button:hover, .slot-grid button:hover,
+      .service-card:hover, .appointment-card:hover, .service-admin:hover, .block-row:hover,
+      .hour-row:hover, .metric-card:hover { transform:none !important; }
+      .field input, .field textarea, .field select,
+      .time-inputs input, .hours-row input[type='time'] {
+        background:var(--app-surface) !important;
+        color:var(--app-text) !important;
+        border-color:var(--app-line-strong) !important;
+        box-shadow:none !important;
+      }
+      .field select { min-height:42px; width:100%; border:1px solid var(--app-line-strong); border-radius:8px; padding:0 12px; }
+      .field input::placeholder, .field textarea::placeholder { color:var(--app-muted) !important; opacity:1; }
+      .button-primary, .button-dark { background:var(--app-text) !important; color:var(--app-bg) !important; border-color:var(--app-text) !important; }
+      html[data-theme='dark'] .button-primary, html[data-theme='dark'] .button-dark { background:var(--app-text) !important; color:var(--app-bg) !important; }
+      .button-soft, .small-action { background:var(--app-surface) !important; color:var(--app-text) !important; border-color:var(--app-line-strong) !important; }
+      .date-grid button, .slot-grid button { background:var(--app-surface) !important; color:var(--app-text-2) !important; border-color:var(--app-line-strong) !important; box-shadow:none !important; }
+      .date-grid button.selected, .slot-grid button.selected { background:var(--app-text) !important; color:var(--app-bg) !important; border-color:var(--app-text) !important; box-shadow:none !important; }
+      .service-payment-settings,
+      .booking-deposit-note,
+      .pix-payment { background:var(--app-surface) !important; color:var(--app-text) !important; border-color:var(--app-line-strong) !important; }
+      .service-payment-settings h3, .payment-final-value strong, .pix-payment-top h2 { color:var(--app-text) !important; }
+      .service-payment-settings p, .payment-final-value small, .booking-deposit-note p, .pix-payment > p { color:var(--app-muted) !important; }
+      .pix-badge { background:var(--app-surface-soft) !important; color:var(--app-text) !important; border:1px solid var(--app-line) !important; }
+      .pix-missing { background:var(--app-surface-soft) !important; color:var(--app-text-2) !important; border:1px solid var(--app-line) !important; }
+      .pix-key-box { background:var(--app-surface-soft) !important; border-color:var(--app-line-strong) !important; color:var(--app-text) !important; }
+      .payment-final-value { margin-top:12px; padding:12px 0 0; border-top:1px solid var(--app-line); display:grid; gap:3px; }
+      .payment-final-value span { font-size:12px; color:var(--app-muted); }
+      .payment-final-value strong { font-size:20px; }
+      .payment-final-value small { font-size:12px; }
+      .hours-settings { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:16px 18px; border-bottom:1px solid var(--app-line); }
+      .hours-settings strong { font-size:14px; }
+      .hours-settings p { margin:5px 0 0; color:var(--app-muted); font-size:12px; }
+      .interval-field { width:190px; margin:0 !important; }
+      .hours-list { display:grid; }
+      .hours-preview { grid-column:2; color:var(--app-muted); font-size:11px; }
+      .hours-row { box-shadow:none !important; }
+      .public-shell { background:var(--app-bg) !important; }
+      .public-nav { box-shadow:none !important; }
+      .profile-image { background:transparent !important; }
+      .service-card, .contact-strip, .selected-service, .summary-mini { background:var(--app-surface) !important; }
+      .booking-panel { box-shadow:0 16px 40px rgba(0,0,0,.14) !important; }
+      .booking-overlay { backdrop-filter:none !important; }
+      .sidebar { box-shadow:none !important; }
+      @media (max-width:640px) {
+        .hours-settings { align-items:stretch; flex-direction:column; gap:12px; }
+        .interval-field { width:100%; }
+        .hours-preview { grid-column:1; }
       }
     `}</style>
   );
