@@ -868,24 +868,14 @@ function AuthPage() {
         throw new Error('O Supabase não retornou o usuário após o cadastro.');
       }
 
-      const baseSlug = slugify(name.trim()) || 'profissional';
-      const slug = `${baseSlug}-${data.user.id.slice(0, 6)}`;
+      // O profile é criado automaticamente pelo trigger handle_new_user
+      // no Supabase. Não fazemos INSERT em profiles pelo navegador.
+      console.log('4. Usuário criado. O profile será criado pelo trigger do Supabase.');
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          name: name.trim(),
-          business_name: '',
-          specialty: '',
-          slug,
-        });
-
-      console.log('4. RESPOSTA PERFIL:', { profileError });
-
-      if (profileError) {
-        console.error('ERRO AO CRIAR PERFIL:', profileError);
-        throw profileError;
+      if (!data.session) {
+        setError('Cadastro criado! Verifique seu e-mail para confirmar sua conta antes de entrar.');
+        setMode('login');
+        return;
       }
 
       window.location.href = '/dashboard/perfil';
