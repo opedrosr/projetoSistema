@@ -19,6 +19,9 @@ import {
   Sparkles,
   Trash2,
   UserRound,
+  Upload,
+  Image as ImageIcon,
+  Palette,
   X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -66,6 +69,15 @@ const navItems = [
 
 type PublicData = Awaited<ReturnType<typeof getPublicProfile>>;
 type OwnerData = Awaited<ReturnType<typeof getOwnerData>>;
+type CustomProfile = Profile & {
+  logo_url?: string | null;
+  description?: string | null;
+  primary_color?: string | null;
+};
+
+function customProfile(profile: Profile): CustomProfile {
+  return profile as CustomProfile;
+}
 
 function Button({
   children,
@@ -168,6 +180,8 @@ function PublicPage({ slug }: { slug: string }) {
   }, [slug]);
 
   const profile = data?.profile;
+  const publicProfile = profile ? customProfile(profile) : null;
+  const primaryColor = publicProfile?.primary_color || '#111111';
   const today = dateKey(new Date());
 
   const nextDays = useMemo(
@@ -329,7 +343,9 @@ function PublicPage({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="public-shell">
+    <div className="public-shell" style={{
+      ['--profile-primary' as string]: primaryColor,
+    } as React.CSSProperties}>
       <PublicNav
         profile={profile}
         onMenu={() => setMobileMenu(!mobileMenu)}
@@ -351,6 +367,12 @@ function PublicPage({ slug }: { slug: string }) {
               {profile.specialty || '[Especialidade]'}
             </p>
 
+            {publicProfile?.description && (
+              <p className="profile-description">
+                {publicProfile.description}
+              </p>
+            )}
+
             <div className="profile-facts">
               <span>
                 <Clock3 size={16} /> Atendimento com hora marcada
@@ -365,6 +387,7 @@ function PublicPage({ slug }: { slug: string }) {
             </div>
 
             <Button
+              style={{ backgroundColor: primaryColor }}
               onClick={() => {
                 setStep(1);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -507,9 +530,32 @@ function PublicNav({
   onMenu: () => void;
   open?: boolean;
 }) {
+  const custom = customProfile(profile);
+
   return (
     <header className="public-nav">
-      <Brand />
+      <a className="brand" href="/">
+        {custom.logo_url ? (
+          <img
+            src={custom.logo_url}
+            alt={custom.business_name || 'Logo'}
+            style={{
+              width: 34,
+              height: 34,
+              objectFit: 'contain',
+              borderRadius: 10,
+            }}
+          />
+        ) : (
+          <span className="brand-mark">
+            <Sparkles size={15} />
+          </span>
+        )}
+        <span>
+          {custom.business_name || 'agenda'}
+          {!custom.business_name && <span className="brand-dot">.</span>}
+        </span>
+      </a>
 
       <div className={`public-links ${open ? 'open' : ''}`}>
         <a href="#servicos">Serviços</a>
@@ -812,212 +858,68 @@ function BookingDrawer({
   );
 }
 
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => { timeoutId = setTimeout(() => reject(new Error(message)), ms); });
+  try { return await Promise.race([Promise.resolve(promise), timeout]); }
+  finally { if (timeoutId) clearTimeout(timeoutId); }
+}
+
 function AuthPage() {
-  const [mode, setMode] = useState<'login' | 'signup'>(
-    'login',
-  );
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setLoading(true);
-    setError('');
-
+    if (loading) return;
+    setLoading(true); setError(''); setSuccess('');
     try {
       if (mode === 'login') {
-        console.log('2. TENTANDO LOGIN');
-
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-
-        if (error) {
-          console.error('ERRO REAL DO SUPABASE:', error);
-          throw error;
-        }
-
+        const { error } = await withTimeout(supabase.auth.signInWithPassword({ email: email.trim(), password }), 15000, 'O login demorou demais para responder. Verifique sua conexão e tente novamente.');
+        if (error) throw error;
         window.location.href = '/dashboard';
         return;
       }
-
-      console.log('2. TENTANDO CADASTRO');
-
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: {
-            name: name.trim(),
-          },
-        },
-      });
-
-      console.log('3. RESPOSTA CADASTRO:', { data, error });
-
-      if (error) {
-        console.error('ERRO REAL DO SUPABASE:', error);
-        throw error;
-      }
-
-      if (!data.user) {
-        throw new Error('O Supabase não retornou o usuário após o cadastro.');
-      }
-
-      // O profile é criado automaticamente pelo trigger handle_new_user
-      // no Supabase. Não fazemos INSERT em profiles pelo navegador.
-      console.log('4. Usuário criado. O profile será criado pelo trigger do Supabase.');
+      const { data, error } = await withTimeout(supabase.auth.signUp({ email: email.trim(), password, options: { data: { name: name.trim() } } }), 20000, 'O cadastro demorou demais para responder. Verifique sua conexão e tente novamente.');
+      if (error) throw error;
+      if (!data.user) throw new Error('O Supabase não retornou o usuário após o cadastro.');
 
       if (!data.session) {
-        setError('Cadastro criado! Verifique seu e-mail para confirmar sua conta antes de entrar.');
-        setMode('login');
+        setSuccess('Conta criada. Confira seu e-mail para confirmar a conta. Depois, volte aqui e entre com seu e-mail e senha.');
         return;
       }
 
+      // O profile é criado automaticamente pelo trigger do Supabase.
       window.location.href = '/dashboard/perfil';
     } catch (err) {
       console.error('ERRO REAL DO SUPABASE:', err);
-
-      const message =
-        err instanceof Error
-          ? err.message
-          : typeof err === 'object' && err !== null
-            ? (
-                'message' in err && typeof err.message === 'string'
-                  ? err.message
-                  : JSON.stringify(err)
-              )
-            : String(err);
-
+      const message = err instanceof Error ? err.message : typeof err === 'object' && err !== null ? ('message' in err && typeof err.message === 'string' ? err.message : JSON.stringify(err)) : String(err);
       setError(message);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   return (
     <div className="auth-page">
-      <div className="auth-aside">
-        <Brand />
-
-        <div>
-          <div className="eyebrow">
-            Seu negócio, no seu ritmo
-          </div>
-
-          <h1>
-            Um link simples para uma agenda mais leve.
-          </h1>
-
-          <p>
-            Organize seus horários, apresente seus serviços e
-            deixe suas clientes agendarem sozinhas.
-          </p>
-        </div>
-
-        <span className="aside-note">
-          Feito para profissionais independentes.
-        </span>
-      </div>
-
+      <div className="auth-aside"><Brand /><div><div className="eyebrow">Seu negócio, no seu ritmo</div><h1>Um link simples para uma agenda mais leve.</h1><p>Organize seus horários, apresente seus serviços e deixe suas clientes agendarem sozinhas.</p></div><span className="aside-note">Feito para profissionais independentes.</span></div>
       <main className="auth-card">
-        <a className="mobile-brand" href="/">
-          <Brand />
-        </a>
-
-        <div className="eyebrow">
-          {mode === 'login'
-            ? 'Bem-vinda de volta'
-            : 'Comece por aqui'}
-        </div>
-
-        <h2>
-          {mode === 'login'
-            ? 'Entre na sua conta'
-            : 'Crie sua conta'}
-        </h2>
-
-        <p className="auth-lead">
-          {mode === 'login'
-            ? 'Acesse seu painel e cuide da sua agenda.'
-            : 'Leva menos de um minuto para começar.'}
-        </p>
-
+        <div className="mobile-brand"><Brand /></div>
+        <div className="eyebrow">{mode === 'login' ? 'Bem-vinda de volta' : 'Comece por aqui'}</div>
+        <h2>{mode === 'login' ? 'Entre na sua conta' : 'Crie sua conta'}</h2>
+        <p className="auth-lead">{mode === 'login' ? 'Acesse seu painel e cuide da sua agenda.' : 'Leva menos de um minuto para começar.'}</p>
         <form onSubmit={submit}>
-          {mode === 'signup' && (
-            <Field
-              label="Seu nome"
-              placeholder="Como você se chama?"
-              value={name}
-              onChange={(event) =>
-                setName(event.target.value)
-              }
-              required
-            />
-          )}
-
-          <Field
-            label="E-mail"
-            type="email"
-            placeholder="voce@exemplo.com"
-            value={email}
-            onChange={(event) =>
-              setEmail(event.target.value)
-            }
-            required
-          />
-
-          <Field
-            label="Senha"
-            type="password"
-            placeholder="Mínimo de 6 caracteres"
-            value={password}
-            onChange={(event) =>
-              setPassword(event.target.value)
-            }
-            minLength={6}
-            required
-          />
-
-          {error && (
-            <div className="form-error">{error}</div>
-          )}
-
-          <Button type="submit" disabled={loading}>
-            {loading ? (
-              <LoaderCircle
-                className="spin"
-                size={17}
-              />
-            ) : null}
-
-            {mode === 'login'
-              ? 'Entrar no painel'
-              : 'Criar minha conta'}
-
-            <ArrowRight size={17} />
-          </Button>
+          {mode === 'signup' && <Field label="Seu nome" placeholder="Como você se chama?" value={name} onChange={(event) => setName(event.target.value)} required />}
+          <Field label="E-mail" type="email" placeholder="voce@exemplo.com" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          <Field label="Senha" type="password" placeholder="Mínimo de 6 caracteres" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required />
+          {error && <div className="form-error">{error}</div>}
+          {success && <div className="saved">{success}</div>}
+          <Button type="submit" disabled={loading}>{loading ? <LoaderCircle className="spin" size={17} /> : null}{mode === 'login' ? 'Entrar no painel' : 'Criar minha conta'}<ArrowRight size={17} /></Button>
         </form>
-
-        <p className="switch-auth">
-          {mode === 'login'
-            ? 'Ainda não tem uma conta?'
-            : 'Já tem uma conta?'}
-
-          <button
-            onClick={() =>
-              setMode(
-                mode === 'login' ? 'signup' : 'login',
-              )
-            }
-          >
-            {mode === 'login' ? 'Criar agora' : 'Entrar'}
-          </button>
-        </p>
+        <p className="switch-auth">{mode === 'login' ? 'Ainda não tem uma conta?' : 'Já tem uma conta?'}<button type="button" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setSuccess(''); }}>{mode === 'login' ? 'Criar agora' : 'Entrar'}</button></p>
       </main>
     </div>
   );
@@ -1025,36 +927,26 @@ function AuthPage() {
 
 function Dashboard({ userId }: { userId: string }) {
   const [data, setData] = useState<OwnerData>();
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    getOwnerData(userId)
-      .then(setData)
-      .catch(() =>
-        setError('Não foi possível carregar seu painel.'),
-      );
+    let active = true;
+    setLoading(true); setError(''); setData(undefined);
+    withTimeout(getOwnerData(userId), 15000, 'O painel demorou demais para carregar. Verifique sua conexão e tente novamente.')
+      .then((result) => {
+        if (!active) return;
+        if (!result) { setError('Sua conta foi encontrada, mas o perfil ainda não foi criado. Confirme o e-mail e entre novamente.'); return; }
+        setData(result);
+      })
+      .catch((err) => { if (!active) return; console.error('ERRO AO CARREGAR PAINEL:', err); setError(err instanceof Error ? err.message : 'Não foi possível carregar seu painel.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [userId]);
 
-  if (error) {
-    return (
-      <div className="center-page">
-        <p>{error}</p>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="center-page">
-        <LoaderCircle className="spin" />
-        <p>Carregando seu espaço...</p>
-      </div>
-    );
-  }
-
-  return (
-    <DashboardLayout data={data} setData={setData} />
-  );
+  if (loading) return <div className="center-page"><LoaderCircle className="spin" /><p>Carregando seu espaço...</p></div>;
+  if (error || !data) return <div className="center-page"><div className="panel centered"><div className="eyebrow">Não foi possível abrir o painel</div><h1>{error || 'Seu perfil não foi encontrado.'}</h1><p>Se você acabou de criar a conta, confirme o e-mail e entre novamente.</p><Button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}>Voltar para o login</Button></div></div>;
+  return <DashboardLayout data={data} setData={setData} />;
 }
 
 function DashboardLayout({
@@ -2190,15 +2082,81 @@ function ProfileSettings({
   setData,
 }: {
   data: NonNullable<OwnerData>;
-  setData: React.Dispatch<
-    React.SetStateAction<OwnerData | undefined>
-  >;
+  setData: React.Dispatch<React.SetStateAction<OwnerData | undefined>>;
 }) {
-  const [form, setForm] = useState(data.profile);
+  const [form, setForm] = useState<CustomProfile>(customProfile(data.profile));
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState<'logo' | 'avatar' | null>(null);
+  const [error, setError] = useState('');
+
+  async function uploadImage(
+    event: React.ChangeEvent<HTMLInputElement>,
+    field: 'logo' | 'avatar',
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Escolha uma imagem válida.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('A imagem deve ter no máximo 5 MB.');
+      return;
+    }
+
+    setUploading(field);
+    setError('');
+
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `${form.id}/${field}-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('profile-media')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage
+        .from('profile-media')
+        .getPublicUrl(path);
+
+      const column = field === 'logo' ? 'logo_url' : 'avatar_url';
+      const { data: updated, error: updateError } = await supabase
+        .from('profiles')
+        .update({ [column]: publicData.publicUrl })
+        .eq('id', form.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      const next = customProfile(updated as Profile);
+      setForm(next);
+      setData({ ...data, profile: updated as Profile });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'Não foi possível enviar a imagem.');
+    } finally {
+      setUploading(null);
+    }
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    setError('');
+
+    const slug = slugify(form.slug) || `profissional-${form.id.slice(0, 8)}`;
+    const primaryColor = form.primary_color || '#111111';
 
     const result = await supabase
       .from('profiles')
@@ -2206,26 +2164,29 @@ function ProfileSettings({
         name: form.name,
         business_name: form.business_name,
         specialty: form.specialty,
-        slug: slugify(form.slug),
+        slug,
         whatsapp: form.whatsapp,
         phone: form.phone,
         address: form.address,
         city: form.city,
         state: form.state,
+        description: form.description || '',
+        primary_color: primaryColor,
       })
       .eq('id', form.id)
       .select()
       .maybeSingle();
 
-    if (!result.error && result.data) {
-      setData({
-        ...data,
-        profile: result.data as Profile,
-      });
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
 
-      setForm(result.data as Profile);
+    if (result.data) {
+      const next = customProfile(result.data as Profile);
+      setData({ ...data, profile: result.data as Profile });
+      setForm(next);
       setSaved(true);
-
       setTimeout(() => setSaved(false), 2500);
     }
   }
@@ -2236,13 +2197,10 @@ function ProfileSettings({
     <>
       <div className="page-title">
         <div>
-          <div className="eyebrow">
-            Sua presença online
-          </div>
+          <div className="eyebrow">Personalize seu espaço</div>
           <h1>Meu perfil</h1>
           <p>
-            Essas informações aparecem na sua página
-            pública.
+            Monte sua página do seu jeito. Logo, foto, identidade e informações aparecem para suas clientes.
           </p>
         </div>
 
@@ -2254,16 +2212,59 @@ function ProfileSettings({
         )}
       </div>
 
+      {error && <div className="form-error">{error}</div>}
+
       <div className="profile-settings-grid">
         <form className="form-card" onSubmit={save}>
           <div className="profile-form-heading">
             <Avatar profile={form} size="large" />
-
             <div>
-              <h2>Informações do negócio</h2>
-              <p>
-                Conte um pouco sobre o seu trabalho.
-              </p>
+              <h2>Identidade</h2>
+              <p>Escolha como seu negócio será apresentado.</p>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="media-field">
+              <span>Foto de perfil</span>
+              <div className="media-upload">
+                <Avatar profile={form} size="large" />
+                <label className="button button-soft">
+                  <Upload size={16} />
+                  {uploading === 'avatar' ? 'Enviando...' : 'Trocar foto'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    disabled={!!uploading}
+                    onChange={(event) => uploadImage(event, 'avatar')}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="media-field">
+              <span>Logo</span>
+              <div className="media-upload">
+                <div style={{ width: 64, height: 64, display: 'grid', placeItems: 'center', border: '1px solid rgba(0,0,0,.08)', borderRadius: 14, overflow: 'hidden' }}>
+                  {form.logo_url ? (
+                    <img src={form.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  ) : (
+                    <ImageIcon size={22} />
+                  )}
+                </div>
+                <label className="button button-soft">
+                  <Upload size={16} />
+                  {uploading === 'logo' ? 'Enviando...' : 'Enviar logo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    disabled={!!uploading}
+                    onChange={(event) => uploadImage(event, 'logo')}
+                  />
+                </label>
+              </div>
             </div>
           </div>
 
@@ -2272,25 +2273,13 @@ function ProfileSettings({
               label="Nome do negócio"
               placeholder="Como suas clientes te conhecem?"
               value={form.business_name}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  business_name:
-                    event.target.value,
-                })
-              }
+              onChange={(event) => setForm({ ...form, business_name: event.target.value })}
             />
-
             <Field
               label="Seu nome"
               placeholder="Seu nome completo"
               value={form.name}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  name: event.target.value,
-                })
-              }
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
             />
           </div>
 
@@ -2298,37 +2287,31 @@ function ProfileSettings({
             label="Especialidade"
             placeholder="Ex.: Designer de sobrancelhas"
             value={form.specialty}
-            onChange={(event) =>
-              setForm({
-                ...form,
-                specialty: event.target.value,
-              })
-            }
+            onChange={(event) => setForm({ ...form, specialty: event.target.value })}
           />
+
+          <label className="field">
+            <span>Descrição</span>
+            <textarea
+              rows={4}
+              placeholder="Conte brevemente sobre seu trabalho..."
+              value={form.description || ''}
+              onChange={(event) => setForm({ ...form, description: event.target.value })}
+            />
+          </label>
 
           <div className="form-row">
             <Field
               label="WhatsApp"
               placeholder="(00) 00000-0000"
               value={form.whatsapp}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  whatsapp: event.target.value,
-                })
-              }
+              onChange={(event) => setForm({ ...form, whatsapp: event.target.value })}
             />
-
             <Field
               label="Telefone"
               placeholder="(00) 0000-0000"
               value={form.phone}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  phone: event.target.value,
-                })
-              }
+              onChange={(event) => setForm({ ...form, phone: event.target.value })}
             />
           </div>
 
@@ -2336,12 +2319,7 @@ function ProfileSettings({
             label="Endereço"
             placeholder="Rua, número"
             value={form.address}
-            onChange={(event) =>
-              setForm({
-                ...form,
-                address: event.target.value,
-              })
-            }
+            onChange={(event) => setForm({ ...form, address: event.target.value })}
           />
 
           <div className="form-row">
@@ -2349,70 +2327,50 @@ function ProfileSettings({
               label="Cidade"
               placeholder="Sua cidade"
               value={form.city}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  city: event.target.value,
-                })
-              }
+              onChange={(event) => setForm({ ...form, city: event.target.value })}
             />
-
             <Field
               label="Estado"
               placeholder="UF"
               maxLength={2}
               value={form.state}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  state:
-                    event.target.value.toUpperCase(),
-                })
-              }
+              onChange={(event) => setForm({ ...form, state: event.target.value.toUpperCase() })}
             />
           </div>
 
-          <Button type="submit">
-            Salvar alterações
-          </Button>
+          <label className="field">
+            <span><Palette size={15} /> Cor principal</span>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <input
+                type="color"
+                value={form.primary_color || '#111111'}
+                onChange={(event) => setForm({ ...form, primary_color: event.target.value })}
+                style={{ width: 52, height: 42, padding: 3 }}
+              />
+              <input
+                value={form.primary_color || '#111111'}
+                onChange={(event) => setForm({ ...form, primary_color: event.target.value })}
+                placeholder="#111111"
+              />
+            </div>
+          </label>
+
+          <Button type="submit">Salvar alterações</Button>
         </form>
 
         <aside className="link-card">
-          <div className="link-card-icon">
-            <Link2 size={20} />
-          </div>
-
-          <div className="eyebrow">
-            Seu link de agendamento
-          </div>
-
+          <div className="link-card-icon"><Link2 size={20} /></div>
+          <div className="eyebrow">Seu link de agendamento</div>
           <h2>Pronto para compartilhar</h2>
-
-          <p>
-            Coloque na bio do Instagram e deixe suas
-            clientes marcarem sozinhas.
-          </p>
-
+          <p>Coloque na bio do Instagram e deixe suas clientes marcarem sozinhas.</p>
           <div className="copy-field">
             <span>{publicUrl}</span>
-
-            <button
-              onClick={() =>
-                navigator.clipboard.writeText(publicUrl)
-              }
-            >
+            <button type="button" onClick={() => navigator.clipboard.writeText(publicUrl)}>
               <Copy size={16} />
             </button>
           </div>
-
-          <a
-            className="text-link"
-            href={publicUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Abrir página pública{' '}
-            <ExternalLink size={15} />
+          <a className="text-link" href={publicUrl} target="_blank" rel="noreferrer">
+            Abrir página pública <ExternalLink size={15} />
           </a>
         </aside>
       </div>
