@@ -2998,142 +2998,154 @@ function DesignSystem() {
       }
 
 
-      /* HARMONY / RESPONSIVE WIDTH PASS */
-      .dashboard-shell { grid-template-columns:240px minmax(0,1fr); }
-      .dashboard-content { width:min(1180px,calc(100% - 48px)); padding:32px 0 64px; }
-      .dashboard-top { padding-left:clamp(20px,3vw,40px); padding-right:clamp(20px,3vw,40px); }
-      .page-title { margin-bottom:24px; }
-      .page-title h1 { font-size:36px; }
-      .dashboard-section, .form-card, .hours-card, .link-card { border-radius:16px; }
-      .dashboard-section { padding:20px; }
-      .form-card { gap:15px; padding:20px; }
+      /* FINAL LAYOUT / RESPONSIVE SYSTEM */
+      .dashboard-shell { grid-template-columns:250px minmax(0,1fr); }
+      .sidebar { padding:18px 14px; }
+      .sidebar-top { padding:0 7px 11px; }
+      .side-profile { gap:11px; padding:12px 10px; margin-bottom:9px; border-radius:8px; }
+      .side-profile strong { max-width:170px; font-size:13px; }
+      .side-profile span { max-width:170px; font-size:10px; }
+      .sidebar nav { gap:1px; }
+      .sidebar nav a { gap:11px; padding:11px; border-radius:7px; font-size:13px; }
+      .sidebar nav a.active::before { left:-14px; height:22px; border-radius:0; }
+      .logout { gap:11px; padding:11px; border-radius:7px; font-size:13px; }
+      .sidebar nav a svg, .logout svg { width:18px; height:18px; }
+
+      .dashboard-main { width:100%; min-width:0; }
+      .dashboard-top { min-height:68px; gap:12px; padding:10px clamp(18px,2.5vw,32px); }
+      .top-kicker { font-size:10px; }
+      .dashboard-top strong { font-size:14px; }
+      .public-link { gap:8px; padding:10px 12px; border-radius:7px; font-size:11px; }
+      .dashboard-content { width:min(1180px,calc(100% - 48px)); margin:0 auto; padding:34px 0 60px; box-sizing:border-box; }
+      .page-title { gap:24px; margin-bottom:24px; }
+      .page-title h1 { font-size:40px; }
+      .page-title p { font-size:13px; }
+      .dashboard-section, .form-card, .hours-card, .link-card { border-radius:8px; }
+      .dashboard-section { padding:21px; }
+      .form-card { gap:14px; padding:21px; }
+      .form-card h2, .section-heading h2 { font-size:18px; }
+      .section-heading { margin-bottom:16px; }
       .overview-grid { gap:14px; margin-bottom:22px; }
-      .metric-card { min-height:120px; padding:18px; }
+      .metric-card { min-height:122px; padding:18px; border-radius:7px; }
+      .metric-card strong { font-size:28px; }
+      .metric-card span { font-size:11px; }
       .appointment-list, .service-admin-list, .block-list { gap:9px; }
-      .appointment-card { grid-template-columns:82px minmax(0,1fr) auto; gap:16px; padding:14px; }
-      .appointment-time strong { font-size:18px; }
-      .appointment-info strong { font-size:11px; }
+      .appointment-card { grid-template-columns:82px minmax(0,1fr) auto; gap:13px; padding:15px; border-radius:7px; }
+      .appointment-card strong { font-size:14px; }
+      .appointment-card span { font-size:11px; }
+      .service-admin, .block-row { padding:14px 15px; border-radius:7px; }
       .two-column, .profile-settings-grid { gap:16px; }
-      .service-admin, .block-row { padding:14px 15px; }
       .hours-row { grid-template-columns:155px minmax(0,1fr); gap:20px; padding:16px 18px; }
       .quick-actions { gap:9px; margin-top:18px; }
+      .small-action { border-radius:6px; }
+      .copy-field { border-radius:7px; }
+      .copy-field button { border-radius:6px; }
+      .tabs { border-radius:7px; }
+      .tabs button { border-radius:5px; }
 
+      /* Public page: preserve the desktop scale while using restrained corners. */
       .public-nav { width:min(1200px,calc(100% - 40px)); }
       .profile-hero { width:min(1200px,calc(100% - 40px)); min-height:600px; grid-template-columns:minmax(300px,.85fr) minmax(0,1.15fr); gap:clamp(40px,6vw,90px); padding:64px 0 72px; }
       .profile-image { min-height:390px; }
-      .profile-content h1 { max-width:760px; }
       .public-section, .location-section, .contact-strip, .public-shell footer { width:min(1200px,calc(100% - 40px)); }
       .public-section { padding:58px 0 72px; }
-      .section-heading { margin-bottom:22px; }
       .service-list { gap:14px; }
-      .service-card { min-height:166px; padding:22px; gap:24px; }
+      .service-card { min-height:166px; padding:22px; gap:24px; border-radius:7px; }
       .contact-strip { margin-top:8px; padding:26px 28px; }
       .location-section { padding:68px 0 78px; }
-
       .booking-panel { width:min(720px,100%); }
       .booking-content { padding:26px !important; }
       .date-grid { gap:7px; margin:20px 0 21px; }
-      .date-grid button { min-height:74px; }
-      .slot-area { padding:17px; }
+      .date-grid button { min-height:74px; border-radius:6px; }
+      .slot-area { padding:17px; border-radius:8px; }
       .slot-grid { gap:8px; margin-top:11px; }
-      .slot-grid button { min-height:44px; }
+      .slot-grid button { min-height:44px; border-radius:6px; }
 
-      @media (min-width: 1400px) {
+      @media (min-width:1400px) {
         .dashboard-content { width:min(1240px,calc(100% - 72px)); }
         .public-nav, .profile-hero, .public-section, .location-section, .contact-strip, .public-shell footer { width:min(1280px,calc(100% - 72px)); }
       }
 
-      @media (max-width: 900px) {
-        .dashboard-shell { grid-template-columns:1fr; }
-        .sidebar { position:fixed; inset:0 auto 0 0; width:min(270px,84vw); }
-        .profile-hero { grid-template-columns:1fr; min-height:auto; gap:28px; padding:52px 0 58px; text-align:center; }
-        .profile-content { margin:0 auto; }
-        .profile-facts { justify-content:center; }
+      @media (max-width:1100px) {
+        .dashboard-shell { grid-template-columns:228px minmax(0,1fr); }
+        .dashboard-content { width:min(1040px,calc(100% - 36px)); }
+        .sidebar nav a { font-size:12px; }
+      }
+
+      @media (max-width:900px) {
+        html, body, #root { width:100%; min-width:0; overflow-x:hidden; }
+        .dashboard-shell { display:block; width:100%; min-height:100vh; }
+        .dashboard-main { width:100%; min-width:0; overflow-x:hidden; }
+        .dashboard-top { width:100%; box-sizing:border-box; padding:10px 16px; }
+        .dashboard-content { width:100%; max-width:none; margin:0; padding:24px 16px 44px; }
+        .sidebar { position:fixed; inset:0 auto 0 0; width:min(270px,84vw); max-width:84vw; min-height:100vh; transform:translateX(-105%); overflow-x:hidden; overflow-y:auto; z-index:100; }
+        .sidebar.open { transform:translateX(0); }
+        .sidebar-top .icon-button { display:grid; }
+        .mobile-only { display:grid; }
+        .profile-hero { width:calc(100% - 32px); min-height:auto; grid-template-columns:1fr; gap:28px; padding:52px 0 58px; text-align:center; }
         .profile-image { min-height:300px; }
+        .profile-content { width:100%; margin:0 auto; }
+        .profile-facts { justify-content:center; }
+        .public-section, .location-section, .contact-strip, .public-shell footer { width:calc(100% - 32px); }
+        .service-list { grid-template-columns:1fr; }
+        .two-column, .profile-settings-grid { grid-template-columns:1fr; }
+        .form-row { grid-template-columns:1fr; }
       }
 
-      @media (max-width: 1100px) {
-        .dashboard-content { width:min(1100px,calc(100% - 36px)); }
-        .dashboard-shell { grid-template-columns:224px minmax(0,1fr); }
-        .profile-hero { gap:44px; }
+      @media (max-width:640px) {
+        .dashboard-top { min-height:60px; padding:8px 12px; gap:9px; }
+        .dashboard-top > div:nth-child(2) { min-width:0; overflow:hidden; }
+        .dashboard-top strong { display:block; max-width:calc(100vw - 100px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+        .public-link { width:36px; min-width:36px; height:36px; padding:0; justify-content:center; font-size:0; border-radius:50%; }
+        .dashboard-content { width:100%; padding:18px 12px 36px; }
+        .page-title { width:100%; align-items:flex-start; flex-direction:column; gap:8px; margin-bottom:16px; }
+        .page-title h1 { font-size:32px; line-height:1.04; }
+        .page-title p { font-size:12px; }
+        .page-title > .button, .page-title > a.button { width:100%; }
+        .overview-grid { grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+        .overview-grid .metric-card:first-child { grid-column:1 / -1; }
+        .metric-card { min-height:96px; padding:13px; }
+        .metric-card strong { font-size:25px; }
+        .dashboard-section, .form-card, .hours-card, .link-card { width:100%; padding:14px; border-radius:8px; }
+        .section-heading { gap:8px; }
+        .appointment-card { width:100%; grid-template-columns:58px minmax(0,1fr); gap:9px; padding:11px; }
+        .appointment-time strong { font-size:16px; }
+        .appointment-info { min-width:0; overflow:hidden; }
+        .appointment-info strong, .appointment-info span, .appointment-info a { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .appointment-actions { grid-column:2; justify-content:flex-start; margin-top:2px; }
+        .appointment-price { grid-column:2; text-align:left; margin-top:2px; }
+        .service-admin, .block-row { width:100%; padding:11px 12px; }
+        .service-admin > div:last-child, .block-row > div:last-child { flex-shrink:0; }
+        .hours-row { grid-template-columns:1fr; gap:10px; padding:12px; }
+        .time-inputs { width:100%; justify-content:flex-start; }
+        .time-inputs input, .hours-row input[type='time'] { min-width:0; flex:1; }
+        .profile-form-heading { display:flex; align-items:center; gap:12px; }
+        .profile-form-heading .avatar-large { flex-shrink:0; }
+        .copy-field { max-width:100%; }
+
+        .public-nav { width:calc(100% - 24px); margin-top:8px; }
+        .profile-hero, .public-section, .location-section, .contact-strip, .public-shell footer { width:calc(100% - 24px); }
+        .profile-hero { min-height:auto; gap:26px; padding:38px 0 46px; }
+        .profile-image { width:100%; min-height:220px; }
+        .profile-content { width:100%; max-width:100%; display:flex; flex-direction:column; align-items:center; }
+        .profile-content h1 { font-size:clamp(38px,12vw,54px); max-width:100%; overflow-wrap:anywhere; }
+        .profile-facts { width:100%; align-items:center; flex-direction:column; margin-top:15px; }
+        .service-card { width:100%; min-height:0; padding:15px; gap:13px; }
+        .contact-strip, .location-section { align-items:center; flex-direction:column; padding:18px; text-align:center; }
+        .location-section { padding:44px 0 52px; }
+        .public-shell footer { align-items:flex-start; flex-direction:column; }
+        .booking-overlay { align-items:flex-end; padding:6px !important; }
+        .booking-panel { width:100%; max-width:100%; max-height:calc(100vh - 12px); border-radius:10px !important; }
+        .booking-content { width:100%; padding:16px !important; box-sizing:border-box; }
+        .booking-heading h2 { font-size:24px; }
+        .date-grid { grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; }
+        .slot-grid { grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }
+        .booking-receipt { grid-template-columns:1fr; }
+        .booking-receipt > div { text-align:left; }
       }
 
-      @media (max-width: 640px) {
-        .dashboard-shell { grid-template-columns:1fr; }
-        .dashboard-content { width:calc(100% - 24px); padding:24px 0 44px; }
-        .dashboard-top { padding:9px 12px; }
-        .page-title { margin-bottom:18px; }
-        .page-title h1 { font-size:31px; }
-        .dashboard-section, .form-card { padding:16px; }
-        .overview-grid { gap:9px; margin-bottom:18px; }
-        .metric-card { min-height:104px; padding:15px; }
-        .appointment-card { grid-template-columns:64px minmax(0,1fr) auto; gap:10px; padding:12px; }
-        .hours-row { grid-template-columns:1fr; gap:10px; padding:14px 15px; }
-        .public-nav, .profile-hero, .public-section, .location-section, .contact-strip, .public-shell footer { width:calc(100% - 24px); }
-        .profile-hero { min-height:auto; gap:26px; padding:42px 0 48px; }
-        .profile-image { min-height:240px; }
-        .public-section { padding:44px 0 54px; }
-        .section-heading { margin-bottom:16px; }
-        .service-list { gap:10px; }
-        .service-card { min-height:145px; padding:17px; gap:16px; }
-        .contact-strip { padding:20px; }
-        .location-section { padding:48px 0 58px; }
-        .booking-content { padding:18px !important; }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
+      @media (prefers-reduced-motion:reduce) {
         *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
-      }
-      /* FINAL SCALE / DENSITY PASS */
-      .dashboard-shell { grid-template-columns: 250px minmax(0,1fr); }
-      .sidebar { padding: 18px 14px; }
-      .sidebar-top { padding: 0 7px 11px; }
-      .side-profile { gap: 11px; padding: 12px 10px; margin-bottom: 9px; }
-      .side-profile strong { max-width: 170px; font-size: 13px; }
-      .side-profile span { max-width: 170px; font-size: 10px; }
-      .sidebar nav { gap: 1px; }
-      .sidebar nav a { gap: 11px; padding: 11px 11px; border-radius: 10px; font-size: 13px; }
-      .sidebar nav a.active::before { left: -14px; height: 22px; }
-      .logout { gap: 11px; padding: 11px; font-size: 13px; }
-
-      .dashboard-top { min-height: 68px; gap: 12px; padding: 10px clamp(18px,2.5vw,32px); }
-      .top-kicker { font-size: 10px; }
-      .dashboard-top strong { font-size: 14px; }
-      .public-link { gap: 8px; padding: 10px 12px; border-radius: 10px; font-size: 11px; }
-
-      .dashboard-content { width: min(1180px, calc(100% - 48px)); padding: 34px 0 60px; }
-      .page-title { gap: 24px; margin-bottom: 24px; }
-      .page-title h1 { font-size: 40px; }
-      .page-title p { font-size: 13px; }
-      .dashboard-section, .form-card, .hours-card, .link-card { border-radius: 16px; }
-      .dashboard-section { padding: 21px; }
-      .form-card { gap: 14px; padding: 21px; }
-      .form-card h2, .section-heading h2 { font-size: 18px; }
-      .section-heading { margin-bottom: 16px; }
-
-      .metric-card { min-height: 122px; padding: 18px; }
-      .metric-card strong { font-size: 28px; }
-      .metric-card span { font-size: 11px; }
-      .appointment-card { gap: 13px; padding: 15px; }
-      .appointment-card strong { font-size: 14px; }
-      .appointment-card span { font-size: 11px; }
-
-      /* Keep the sidebar visually compact while making its controls larger. */
-      .sidebar > * { flex-shrink: 0; }
-      .sidebar nav a svg, .logout svg { width: 18px; height: 18px; }
-
-      @media (max-width: 1100px) {
-        .dashboard-shell { grid-template-columns: 228px minmax(0,1fr); }
-        .dashboard-content { width: min(1040px, calc(100% - 36px)); }
-        .sidebar nav a { font-size: 12px; }
-      }
-
-      @media (max-width: 640px) {
-        .dashboard-content { width: calc(100% - 24px); padding: 24px 0 44px; }
-        .page-title h1 { font-size: 34px; }
-        .page-title p { font-size: 12px; }
-        .dashboard-section, .form-card { padding: 18px; }
-        .dashboard-top strong { font-size: 13px; }
       }
 
       /* THEME TOKENS */
