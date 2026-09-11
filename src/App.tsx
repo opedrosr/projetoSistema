@@ -142,7 +142,7 @@ function Avatar({
 function Brand() {
   return (
     <a className="brand" href="/">
-      <span>Apenas agenda</span>
+      <span>Agenda</span>
     </a>
   );
 }
