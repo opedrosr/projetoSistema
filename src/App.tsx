@@ -1814,12 +1814,9 @@ function Hours({
     setSlotsByDay((currentDays) =>
       currentDays.map((slots, index) =>
         index === dayIndex
-          ? slots
-              .map((slot, itemIndex) =>
-                itemIndex === slotIndex ? value : slot,
-              )
-              .filter(Boolean)
-              .sort()
+          ? slots.map((slot, itemIndex) =>
+              itemIndex === slotIndex ? value : slot,
+            )
           : slots,
       ),
     );
@@ -1874,8 +1871,9 @@ function Hours({
 
       const rows = slotsByDay.flatMap(
         (slots, dayIndex) =>
-          slots
+          [...slots]
             .filter((time) => time)
+            .sort()
             .map((time) => ({
               profile_id: data.profile.id,
               day_of_week: dayIndex,
