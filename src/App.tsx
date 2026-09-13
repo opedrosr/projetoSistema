@@ -28,6 +28,7 @@ import {
   createAppointment,
   getAvailableSlots,
   getOwnerData,
+  getPublicPixKey,
   getPublicProfile,
 } from '@/services/data';
 import type {
@@ -117,9 +118,7 @@ type PaymentService = Service & {
   deposit_amount?: number | null;
 };
 
-type PaymentProfile = CustomProfile & {
-  pix_key?: string | null;
-};
+type PaymentProfile = CustomProfile;
 
 function Button({
   children,
@@ -206,13 +205,14 @@ function Empty({
 function PublicPage({ slug }: { slug: string }) {
   const [data, setData] = useState<PublicData>();
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState<Service | null>(null);
+  const [selected, setSelected] = useState<PaymentService | null>(null);
   const [step, setStep] = useState(0);
   const [booking, setBooking] = useState<Partial<BookingData>>({});
   const [slots, setSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmed, setConfirmed] = useState<Appointment | null>(null);
+  const [publicPixKey, setPublicPixKey] = useState('');
   const [mobileMenu, setMobileMenu] = useState(false);
 
   useEffect(() => {
@@ -287,6 +287,22 @@ function PublicPage({ slug }: { slug: string }) {
         `${booking.date}T${booking.time}:00`,
       );
 
+      const paymentType = selected.payment_type || (selected.requires_deposit
+        ? (Number(selected.deposit_amount || 0) >= Number(selected.price || 0) ? 'full' : 'deposit')
+        : 'onsite');
+
+      if (paymentType !== 'onsite') {
+        try {
+          const pixKey = await getPublicPixKey(data.profile.id);
+          setPublicPixKey(typeof pixKey === 'string' ? pixKey : '');
+        } catch (pixError) {
+          console.error('Erro ao buscar chave Pix pública:', pixError);
+          setPublicPixKey('');
+        }
+      } else {
+        setPublicPixKey('');
+      }
+
       setConfirmed(result);
     } catch (err) {
       setError(
@@ -329,12 +345,11 @@ function PublicPage({ slug }: { slug: string }) {
 
   if (confirmed) {
     const paymentSelected = selected as PaymentService | null;
-    const paymentProfile = profile as PaymentProfile;
     const paymentType = ((paymentSelected as PaymentService | null)?.payment_type || (paymentSelected?.requires_deposit ? (Number(paymentSelected?.deposit_amount || 0) >= Number(paymentSelected?.price || 0) ? 'full' : 'deposit') : 'onsite')) as 'onsite' | 'deposit' | 'full';
     const requiresDeposit = paymentType !== 'onsite';
     const depositAmount = Number(paymentSelected?.deposit_amount || 0);
     const isFullPayment = paymentType === 'full';
-    const pixKey = paymentProfile.pix_key?.trim() || '';
+    const pixKey = publicPixKey.trim();
     const whatsappMessage = requiresDeposit
       ? `Olá! Agendei ${selected?.name} para ${booking.date ? formatDate(booking.date) : ''} às ${booking.time} e já fiz o pagamento do ${isFullPayment ? 'serviço' : 'sinal'}.`
       : `Olá! Agendei ${selected?.name} para ${booking.date ? formatDate(booking.date) : ''} às ${booking.time}.`;
@@ -369,10 +384,16 @@ function PublicPage({ slug }: { slug: string }) {
               ) : <div className="pix-missing">A profissional ainda não cadastrou a chave Pix. Entre em contato pelo WhatsApp para concluir a reserva.</div>}
             </div>
           )}
-          <a className="button button-primary" href={whatsappUrl(profile.whatsapp, whatsappMessage)} target="_blank" rel="noreferrer">
-            <MessageCircle size={18} />
-            {requiresDeposit ? 'Enviar comprovante pelo WhatsApp' : 'Falar com a profissional'}
-          </a>
+          {profile.whatsapp ? (
+            <a className="button button-primary" href={whatsappUrl(profile.whatsapp, whatsappMessage)} target="_blank" rel="noreferrer">
+              <MessageCircle size={18} />
+              {requiresDeposit ? 'Enviar comprovante pelo WhatsApp' : 'Falar com a profissional'}
+            </a>
+          ) : (
+            <div className="pix-missing">
+              Agendamento registrado. A profissional ainda não cadastrou o WhatsApp.
+            </div>
+          )}
         </main>
       </div>
     );
