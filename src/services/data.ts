@@ -8,16 +8,20 @@ import type {
 } from '@/types';
 
 export async function getPublicProfile(slug: string) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('slug', slug)
-    .maybeSingle();
+  const { data: profileData, error: profileError } = await supabase.rpc(
+    'get_public_profile',
+    {
+      p_slug: slug.trim(),
+    },
+  );
 
-  if (error) throw error;
+  if (profileError) throw profileError;
+
+  const data = Array.isArray(profileData) ? profileData[0] : profileData;
+
   if (!data) return null;
 
-  const [services, hours, blocks, availability] = await Promise.all([
+  const [services, hours, availability] = await Promise.all([
     supabase
       .from('services')
       .select('*')
@@ -32,12 +36,6 @@ export async function getPublicProfile(slug: string) {
       .order('day_of_week'),
 
     supabase
-      .from('blocked_times')
-      .select('*')
-      .eq('profile_id', data.id)
-      .gte('ends_at', new Date().toISOString()),
-
-    supabase
       .from('availability_slots')
       .select('*')
       .eq('profile_id', data.id)
@@ -48,14 +46,14 @@ export async function getPublicProfile(slug: string) {
 
   if (services.error) throw services.error;
   if (hours.error) throw hours.error;
-  if (blocks.error) throw blocks.error;
   if (availability.error) throw availability.error;
 
   return {
     profile: data as Profile,
     services: services.data as Service[],
     hours: hours.data as BusinessHour[],
-    blocks: blocks.data as BlockedTime[],
+    // Bloqueios são privados. A disponibilidade pública é calculada pelo RPC.
+    blocks: [] as BlockedTime[],
     availability: availability.data as Array<{
       id: string;
       profile_id: string;
@@ -66,13 +64,23 @@ export async function getPublicProfile(slug: string) {
   };
 }
 
+export async function getPublicPixKey(profileId: string) {
+  const { data, error } = await supabase.rpc('get_public_pix_key', {
+    p_profile_id: profileId,
+  });
+
+  if (error) throw error;
+
+  return typeof data === 'string' ? data : '';
+}
+
 export async function getAvailableSlots(
   profileId: string,
   date: string,
   serviceDuration: number,
-  hours: BusinessHour[],
-  blocks: BlockedTime[],
-  availability: Array<{
+  _hours: BusinessHour[],
+  _blocks: BlockedTime[],
+  _availability: Array<{
     id: string;
     profile_id: string;
     day_of_week: number;
@@ -80,81 +88,20 @@ export async function getAvailableSlots(
     active: boolean;
   }> = [],
 ) {
-  const weekday = new Date(`${date}T12:00:00`).getDay();
-
-  const day = hours.find(
-    (item) => item.day_of_week === weekday,
+  const { data, error } = await supabase.rpc(
+    'get_public_available_slots',
+    {
+      p_profile_id: profileId,
+      p_date: date,
+      p_service_duration: serviceDuration,
+    },
   );
-
-  if (
-    !day?.is_open ||
-    !day.start_time ||
-    !day.end_time
-  ) {
-    return [];
-  }
-
-  const { data, error } = await supabase
-    .from('appointments')
-    .select('starts_at, ends_at')
-    .eq('profile_id', profileId)
-    .eq('status', 'confirmed')
-    .gte('starts_at', `${date}T00:00:00`)
-    .lt('starts_at', `${date}T23:59:59`);
 
   if (error) throw error;
 
-  const start = new Date(`${date}T${day.start_time}`);
-  const end = new Date(`${date}T${day.end_time}`);
-  const now = new Date();
-
-  const configuredSlots = availability
-    .filter(
-      (slot) =>
-        slot.profile_id === profileId &&
-        slot.day_of_week === weekday &&
-        slot.active,
-    )
-    .map((slot) => new Date(`${date}T${slot.start_time}`))
-    .filter((slot) => {
-      const slotEnd = new Date(
-        slot.getTime() + serviceDuration * 60000,
-      );
-      return (
-        slot >= start &&
-        slotEnd <= end
-      );
-    });
-
-  const slots: string[] = [];
-
-  for (const cursor of configuredSlots) {
-    const slotEnd = new Date(
-      cursor.getTime() + serviceDuration * 60000,
-    );
-
-    const blockConflicts = blocks.filter(
-      (block) =>
-        new Date(block.starts_at) < slotEnd &&
-        new Date(block.ends_at) > cursor,
-    );
-
-    const appointmentConflicts = (data ?? []).some(
-      (item) =>
-        new Date(item.starts_at) < slotEnd &&
-        new Date(item.ends_at) > cursor,
-    );
-
-    if (
-      cursor > now &&
-      !appointmentConflicts &&
-      blockConflicts.length === 0
-    ) {
-      slots.push(cursor.toTimeString().slice(0, 5));
-    }
-  }
-
-  return slots;
+  return (data ?? []).map((item: { slot_time?: string } | string) =>
+    typeof item === 'string' ? item.slice(0, 5) : String(item.slot_time).slice(0, 5),
+  );
 }
 
 export async function createAppointment(
