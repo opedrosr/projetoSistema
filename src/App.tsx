@@ -12,8 +12,6 @@ import {
   LogOut,
   MapPin,
   Menu,
-  Moon,
-  Sun,
   MessageCircle,
   Plus,
   Scissors,
@@ -173,9 +171,14 @@ function Avatar({
 
 function Brand() {
   return (
-    <a className="brand" href="/">
+    <button
+      type="button"
+      className="brand brand-button"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      aria-label="Ir para o topo"
+    >
       <span>Apenas agenda</span>
-    </a>
+    </button>
   );
 }
 
@@ -307,9 +310,9 @@ function PublicPage({ slug }: { slug: string }) {
             Confira o endereço ou peça à profissional para compartilhar o link
             correto.
           </p>
-          <a href="/login" className="button button-primary">
-            Acessar minha conta <ArrowRight size={16} />
-          </a>
+          <button type="button" className="button button-primary" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+            Voltar ao topo <ArrowRight size={16} />
+          </button>
         </div>
       </div>
     );
@@ -535,9 +538,6 @@ function PublicPage({ slug }: { slug: string }) {
       <footer>
         <Brand />
         <span>Agendamentos simples para pequenos negócios.</span>
-        <a href="/login">
-          Sou profissional <ArrowRight size={14} />
-        </a>
       </footer>
 
       {step > 0 && (
@@ -576,7 +576,12 @@ function PublicNav({
 
   return (
     <header className="public-nav">
-      <a className="brand" href="/">
+      <button
+        type="button"
+        className="brand brand-button"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        aria-label="Ir para o topo"
+      >
         {custom.logo_url ? (
           <img
             src={custom.logo_url}
@@ -589,21 +594,14 @@ function PublicNav({
             }}
           />
         ) : null}
-        <span>
-          {custom.business_name || 'Apenas agenda'}
-        </span>
-      </a>
+        <span>{custom.business_name || 'Apenas agenda'}</span>
+      </button>
 
       <div className={`public-links ${open ? 'open' : ''}`}>
         <a href="#servicos">Serviços</a>
         <a href="#localizacao">Localização</a>
-
         {profile.whatsapp && (
-          <a
-            href={whatsappUrl(profile.whatsapp)}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={whatsappUrl(profile.whatsapp)} target="_blank" rel="noreferrer">
             Contato
           </a>
         )}
@@ -910,8 +908,8 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: stri
   finally { if (timeoutId) clearTimeout(timeoutId); }
 }
 
-function AuthPage() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+function AuthPage({ initialMode = 'login' }: { initialMode?: 'login' | 'signup' }) {
+  const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -970,7 +968,7 @@ function AuthPage() {
   );
 }
 
-function Dashboard({ userId, onToggleTheme, theme }: { userId: string; onToggleTheme: () => void; theme: 'light' | 'dark' }) {
+function Dashboard({ userId }: { userId: string }) {
   const [data, setData] = useState<OwnerData>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -991,21 +989,17 @@ function Dashboard({ userId, onToggleTheme, theme }: { userId: string; onToggleT
 
   if (loading) return <div className="center-page"><LoaderCircle className="spin" /><p>Carregando seu espaço...</p></div>;
   if (error || !data) return <div className="center-page"><div className="panel centered"><div className="eyebrow">Não foi possível abrir o painel</div><h1>{error || 'Seu perfil não foi encontrado.'}</h1><p>Se você acabou de criar a conta, confirme o e-mail e entre novamente.</p><Button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}>Voltar para o login</Button></div></div>;
-  return <DashboardLayout data={data} setData={setData} onToggleTheme={onToggleTheme} theme={theme} />;
+  return <DashboardLayout data={data} setData={setData} />;
 }
 
 function DashboardLayout({
   data,
   setData,
-  onToggleTheme,
-  theme,
 }: {
   data: NonNullable<OwnerData>;
   setData: React.Dispatch<
     React.SetStateAction<OwnerData | undefined>
   >;
-  onToggleTheme: () => void;
-  theme: 'light' | 'dark';
 }) {
   const path = window.location.pathname;
   const [mobileNav, setMobileNav] = useState(false);
@@ -1105,16 +1099,6 @@ function DashboardLayout({
             </strong>
           </div>
 
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={onToggleTheme}
-            aria-label={theme === 'light' ? 'Ativar modo escuro' : 'Ativar modo claro'}
-            title={theme === 'light' ? 'Modo escuro' : 'Modo claro'}
-          >
-            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-            <span className="theme-toggle-label">{theme === 'light' ? 'Modo escuro' : 'Modo claro'}</span>
-          </button>
 
           <a
             className="public-link"
@@ -2424,11 +2408,11 @@ function DesignSystem() {
       }
 
       * { box-sizing: border-box; }
-      html { scroll-behavior: smooth; }
+      html { scroll-behavior: smooth; color-scheme: dark; background:#111315; }
       body {
         margin: 0;
-        background: #f5f5f4;
-        color: var(--ui-ink);
+        background: #111315;
+        color: #f4f5f6;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
@@ -2484,14 +2468,10 @@ function DesignSystem() {
       .panel.centered p { margin:0 0 18px; color:#72777e; font-size:12px; line-height:1.55; }
 
       /* HOME */
-      .home-page { min-height:100vh; position:relative; overflow:hidden; display:flex; flex-direction:column; padding:24px clamp(20px,4vw,56px); background:radial-gradient(circle at 82% 20%,#e9ebed,transparent 24%),linear-gradient(135deg,#fff 0%,#fafafa 58%,#f0f1f2 100%); }
-      .home-page::before { content:""; position:absolute; width:50vw; height:50vw; right:-22vw; top:-25vw; border:1px solid rgba(17,18,20,.07); border-radius:50%; box-shadow:0 0 0 45px rgba(17,18,20,.012),0 0 0 90px rgba(17,18,20,.008); }
-      .home-page > * { position:relative; z-index:1; }
       .home-copy { width:min(760px,100%); margin:auto 0; padding:8vh 0 9vh; animation:ui-in .6s ease both; }
       .home-copy h1 { max-width:700px; margin:15px 0 13px; font-size:clamp(42px,6.5vw,78px); line-height:.96; letter-spacing:-.075em; }
       .home-copy p { max-width:540px; margin:0; color:#656a71; font-size:15px; line-height:1.6; }
       .home-actions { display:flex; gap:9px; align-items:center; flex-wrap:wrap; margin-top:23px; }
-      .home-note { display:inline-flex; align-items:center; gap:7px; width:max-content; padding:8px 11px; border:1px solid var(--ui-line); border-radius:999px; background:rgba(255,255,255,.62); color:#72777e; font-size:10px; }
 
       /* AUTH */
       .auth-page { min-height:100vh; display:grid; grid-template-columns:minmax(0,1.05fr) minmax(390px,.95fr); background:#f5f5f4; }
@@ -2715,7 +2695,6 @@ function DesignSystem() {
       }
 
       @media (max-width: 640px) {
-        .home-page { padding:18px 16px; }
         .home-copy { padding:7vh 0 8vh; }
         .home-copy h1 { font-size:clamp(40px,13vw,58px); }
         .home-actions { flex-direction:column; align-items:stretch; }
@@ -2933,20 +2912,8 @@ function DesignSystem() {
       .pix-key-box button{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;font-weight:600;cursor:pointer}
       .pix-missing{padding:12px;border-radius:7px;background:#fff3e6;color:#8a4a00;font-size:13px;line-height:1.45}
 
-      /* THEME TOKENS */
+      /* DARK THEME */
       :root {
-        --app-bg: #f5f5f4;
-        --app-surface: #ffffff;
-        --app-surface-soft: #f7f7f6;
-        --app-text: #111214;
-        --app-text-2: #4e535a;
-        --app-muted: #777c83;
-        --app-line: rgba(17,18,20,.085);
-        --app-line-strong: rgba(17,18,20,.14);
-        --app-shadow: 0 18px 50px rgba(17,18,20,.085);
-      }
-
-      html[data-theme='dark'] {
         color-scheme: dark;
         --ui-ink: #f4f5f6;
         --ui-ink-2: #d5d8dc;
@@ -2969,156 +2936,149 @@ function DesignSystem() {
         --app-shadow: 0 18px 50px rgba(0,0,0,.32);
       }
 
-      html[data-theme='dark'] body { background:var(--app-bg); color:var(--app-text); }
-      html[data-theme='dark'] .brand-mark { background:#f4f5f6; color:#111214; box-shadow:0 8px 20px rgba(0,0,0,.28); }
-      html[data-theme='dark'] .brand-dot { color:#686e76; }
-      html[data-theme='dark'] .eyebrow,
-      html[data-theme='dark'] .muted,
-      html[data-theme='dark'] .page-title p,
-      html[data-theme='dark'] .auth-lead,
-      html[data-theme='dark'] .profile-description,
-      html[data-theme='dark'] .contact-strip p,
-      html[data-theme='dark'] .location-section p,
-      html[data-theme='dark'] .appointment-time span,
-      html[data-theme='dark'] .appointment-info span,
-      html[data-theme='dark'] .metric-card > span,
-      html[data-theme='dark'] .metric-card p,
-      html[data-theme='dark'] .closed,
-      html[data-theme='dark'] .text-link { color:var(--app-muted); }
+      body { background:var(--app-bg); color:var(--app-text); }
+      .brand-mark { background:#f4f5f6; color:#111214; box-shadow:0 8px 20px rgba(0,0,0,.28); }
+      .brand-dot { color:#686e76; }
+      .eyebrow,
+      .muted,
+      .page-title p,
+      .auth-lead,
+      .profile-description,
+      .contact-strip p,
+      .location-section p,
+      .appointment-time span,
+      .appointment-info span,
+      .metric-card > span,
+      .metric-card p,
+      .closed,
+      .text-link { color:var(--app-muted); }
 
-      html[data-theme='dark'] .button-primary,
-      html[data-theme='dark'] .button-dark { color:#111214; background:#f4f5f6; box-shadow:0 10px 24px rgba(0,0,0,.3); }
-      html[data-theme='dark'] .button-soft { color:#f0f2f4; background:#202328; border-color:var(--app-line-strong); box-shadow:none; }
-      html[data-theme='dark'] .button-ghost { color:#b3b8be; }
-      html[data-theme='dark'] .button-danger { color:#ffb1b1; background:#321d1f; border-color:rgba(255,120,120,.16); }
-      html[data-theme='dark'] .icon-button { color:#e8eaec; background:#1c1f22; border-color:var(--app-line); }
-      html[data-theme='dark'] .icon-button:hover { background:#25282c; }
+      .button-primary,
+      .button-dark { color:#111214; background:#f4f5f6; box-shadow:0 10px 24px rgba(0,0,0,.3); }
+      .button-soft { color:#f0f2f4; background:#202328; border-color:var(--app-line-strong); box-shadow:none; }
+      .button-ghost { color:#b3b8be; }
+      .button-danger { color:#ffb1b1; background:#321d1f; border-color:rgba(255,120,120,.16); }
+      .icon-button { color:#e8eaec; background:#1c1f22; border-color:var(--app-line); }
+      .icon-button:hover { background:#25282c; }
 
-      html[data-theme='dark'] .field > span,
-      html[data-theme='dark'] .media-field > span { color:#c9cdd1; }
-      html[data-theme='dark'] .field input,
-      html[data-theme='dark'] .field textarea,
-      html[data-theme='dark'] .time-inputs input,
-      html[data-theme='dark'] .hours-row input[type='time'] {
+      .field > span,
+      .media-field > span { color:#c9cdd1; }
+      .field input,
+      .field textarea,
+      .time-inputs input,
+      .hours-row input[type='time'] {
         background:#1b1e21 !important;
         color:#f4f5f6 !important;
         border-color:var(--app-line-strong) !important;
         box-shadow:none !important;
       }
-      html[data-theme='dark'] .field input::placeholder,
-      html[data-theme='dark'] .field textarea::placeholder { color:#747b83; }
-      html[data-theme='dark'] .field input:focus,
-      html[data-theme='dark'] .field textarea:focus { border-color:rgba(255,255,255,.34) !important; box-shadow:0 0 0 3px rgba(255,255,255,.06) !important; }
-      html[data-theme='dark'] .form-error { color:#ffb2b2; background:#321d1f; border-color:rgba(255,120,120,.15); }
-      html[data-theme='dark'] .saved { color:#a7e1bb; background:#182a20; border-color:rgba(120,220,155,.14); }
+      .field input::placeholder,
+      .field textarea::placeholder { color:#747b83; }
+      .field input:focus,
+      .field textarea:focus { border-color:rgba(255,255,255,.34) !important; box-shadow:0 0 0 3px rgba(255,255,255,.06) !important; }
+      .form-error { color:#ffb2b2; background:#321d1f; border-color:rgba(255,120,120,.15); }
+      .saved { color:#a7e1bb; background:#182a20; border-color:rgba(120,220,155,.14); }
 
-      html[data-theme='dark'] .center-page { background:radial-gradient(circle at 50% 15%,#25282c,transparent 36%),#111315; }
-      html[data-theme='dark'] .panel,
-      html[data-theme='dark'] .auth-card,
-      html[data-theme='dark'] .dashboard-section,
-      html[data-theme='dark'] .form-card,
-      html[data-theme='dark'] .hours-card,
-      html[data-theme='dark'] .link-card { background:rgba(25,27,30,.94); border-color:var(--app-line); box-shadow:var(--app-shadow); }
-      html[data-theme='dark'] .panel.centered p { color:var(--app-muted); }
+      .center-page { background:radial-gradient(circle at 50% 15%,#25282c,transparent 36%),#111315; }
+      .panel,
+      .auth-card,
+      .dashboard-section,
+      .form-card,
+      .hours-card,
+      .link-card { background:rgba(25,27,30,.94); border-color:var(--app-line); box-shadow:var(--app-shadow); }
+      .panel.centered p { color:var(--app-muted); }
 
-      html[data-theme='dark'] .home-page { background:radial-gradient(circle at 82% 20%,#25282c,transparent 24%),linear-gradient(135deg,#111315 0%,#151719 58%,#202328 100%); }
-      html[data-theme='dark'] .home-page::before,
-      html[data-theme='dark'] .auth-aside::after,
-      html[data-theme='dark'] .public-shell::before { border-color:rgba(255,255,255,.07); }
-      html[data-theme='dark'] .home-copy p,
-      html[data-theme='dark'] .auth-aside p { color:#a8adb3; }
-      html[data-theme='dark'] .home-note { color:#a4aab0; background:rgba(255,255,255,.04); border-color:var(--app-line); }
+      .auth-aside::after,
+      .public-shell::before { border-color:rgba(255,255,255,.07); }
+      .auth-aside p { color:#a8adb3; }
+      .home-note { color:#a4aab0; background:rgba(255,255,255,.04); border-color:var(--app-line); }
 
-      html[data-theme='dark'] .auth-page { background:#111315; }
-      html[data-theme='dark'] .auth-aside { background:radial-gradient(circle at 72% 30%,#24272b,transparent 25%),linear-gradient(145deg,#151719,#202328); border-color:var(--app-line); }
-      html[data-theme='dark'] .auth-card { background:#191b1e; }
-      html[data-theme='dark'] .switch-auth { color:#9299a1; }
-      html[data-theme='dark'] .switch-auth button { color:#f4f5f6; }
+      .auth-page { background:#111315; }
+      .auth-aside { background:radial-gradient(circle at 72% 30%,#24272b,transparent 25%),linear-gradient(145deg,#151719,#202328); border-color:var(--app-line); }
+      .auth-card { background:#191b1e; }
+      .switch-auth { color:#9299a1; }
+      .switch-auth button { color:#f4f5f6; }
 
-      html[data-theme='dark'] .public-shell { background:radial-gradient(circle at 78% 8%,color-mix(in srgb,var(--profile-primary,#fff) 8%,#191b1e),transparent 26%),#151719; }
-      html[data-theme='dark'] .public-nav { background:rgba(25,27,30,.88); border-color:var(--app-line); }
-      html[data-theme='dark'] .public-links a { color:#a8adb3; }
-      html[data-theme='dark'] .public-links a:hover { color:#fff; background:rgba(255,255,255,.06); }
-      html[data-theme='dark'] .profile-image::before { background:linear-gradient(145deg,#202328,#151719); border-color:var(--app-line); box-shadow:20px 25px 55px rgba(0,0,0,.3); }
-      html[data-theme='dark'] .profile-image .avatar { border-color:#202328; }
-      html[data-theme='dark'] .profile-specialty { color:#d5d8dc; }
-      html[data-theme='dark'] .profile-facts span { background:rgba(255,255,255,.04); border-color:var(--app-line); color:#b6bbc1; }
-      html[data-theme='dark'] .service-card { background:#191b1e; border-color:var(--app-line); box-shadow:0 7px 24px rgba(0,0,0,.2); }
-      html[data-theme='dark'] .service-card:hover { border-color:var(--app-line-strong); box-shadow:0 16px 36px rgba(0,0,0,.28); }
-      html[data-theme='dark'] .service-card p,
-      html[data-theme='dark'] .service-duration { color:#9da3aa; }
-      html[data-theme='dark'] .contact-strip { background:linear-gradient(135deg,#1d2023,#151719); border-color:var(--app-line); }
-      html[data-theme='dark'] .public-shell footer { border-color:var(--app-line); color:#777e86; }
+      .public-shell { background:radial-gradient(circle at 78% 8%,color-mix(in srgb,var(--profile-primary,#fff) 8%,#191b1e),transparent 26%),#151719; }
+      .public-nav { background:rgba(25,27,30,.88); border-color:var(--app-line); }
+      .public-links a { color:#a8adb3; }
+      .public-links a:hover { color:#fff; background:rgba(255,255,255,.06); }
+      .profile-image::before { background:linear-gradient(145deg,#202328,#151719); border-color:var(--app-line); box-shadow:20px 25px 55px rgba(0,0,0,.3); }
+      .profile-image .avatar { border-color:#202328; }
+      .profile-specialty { color:#d5d8dc; }
+      .profile-facts span { background:rgba(255,255,255,.04); border-color:var(--app-line); color:#b6bbc1; }
+      .service-card { background:#191b1e; border-color:var(--app-line); box-shadow:0 7px 24px rgba(0,0,0,.2); }
+      .service-card:hover { border-color:var(--app-line-strong); box-shadow:0 16px 36px rgba(0,0,0,.28); }
+      .service-card p,
+      .service-duration { color:#9da3aa; }
+      .contact-strip { background:linear-gradient(135deg,#1d2023,#151719); border-color:var(--app-line); }
+      .public-shell footer { border-color:var(--app-line); color:#777e86; }
 
-      html[data-theme='dark'] .booking-overlay { background:rgba(0,0,0,.56) !important; }
-      html[data-theme='dark'] .booking-panel { background:rgba(25,27,30,.97) !important; border-color:rgba(255,255,255,.12) !important; box-shadow:0 28px 80px rgba(0,0,0,.48) !important; }
-      html[data-theme='dark'] .booking-top { background:rgba(25,27,30,.92) !important; border-color:var(--app-line) !important; }
-      html[data-theme='dark'] .booking-top > div:nth-child(2) small,
-      html[data-theme='dark'] .selected-service span,
-      html[data-theme='dark'] .booking-heading p,
-      html[data-theme='dark'] .summary-mini p { color:#9299a1; }
-      html[data-theme='dark'] .selected-service,
-      html[data-theme='dark'] .summary-mini { background:linear-gradient(135deg,#202328,#191b1e); border-color:var(--app-line); box-shadow:none; }
-      html[data-theme='dark'] .selected-service button,
-      html[data-theme='dark'] .back-link { color:#b9bec4; }
-      html[data-theme='dark'] .date-grid button,
-      html[data-theme='dark'] .slot-grid button { background:#1b1e21; color:#c8cdd2; border-color:var(--app-line-strong); }
-      html[data-theme='dark'] .date-grid button.selected,
-      html[data-theme='dark'] .slot-grid button.selected { color:#111214; }
-      html[data-theme='dark'] .slot-area { background:#17191c; border-color:var(--app-line); }
-      html[data-theme='dark'] .booking-receipt { background:var(--app-line); border-color:var(--app-line); }
-      html[data-theme='dark'] .booking-receipt > div { background:#1c1f22; }
-      html[data-theme='dark'] .booking-receipt span { color:#858c94; }
-      html[data-theme='dark'] .confirmation > p { color:#9da3aa; }
+      .booking-overlay { background:rgba(0,0,0,.56) !important; }
+      .booking-panel { background:rgba(25,27,30,.97) !important; border-color:rgba(255,255,255,.12) !important; box-shadow:0 28px 80px rgba(0,0,0,.48) !important; }
+      .booking-top { background:rgba(25,27,30,.92) !important; border-color:var(--app-line) !important; }
+      .booking-top > div:nth-child(2) small,
+      .selected-service span,
+      .booking-heading p,
+      .summary-mini p { color:#9299a1; }
+      .selected-service,
+      .summary-mini { background:linear-gradient(135deg,#202328,#191b1e); border-color:var(--app-line); box-shadow:none; }
+      .selected-service button,
+      .back-link { color:#b9bec4; }
+      .date-grid button,
+      .slot-grid button { background:#1b1e21; color:#c8cdd2; border-color:var(--app-line-strong); }
+      .date-grid button.selected,
+      .slot-grid button.selected { color:#111214; }
+      .slot-area { background:#17191c; border-color:var(--app-line); }
+      .booking-receipt { background:var(--app-line); border-color:var(--app-line); }
+      .booking-receipt > div { background:#1c1f22; }
+      .booking-receipt span { color:#858c94; }
+      .confirmation > p { color:#9da3aa; }
 
-      html[data-theme='dark'] .dashboard-shell { background:#111315; }
-      html[data-theme='dark'] .sidebar { background:rgba(25,27,30,.9); border-color:var(--app-line); }
-      html[data-theme='dark'] .side-profile { background:rgba(255,255,255,.035); border-color:var(--app-line); }
-      html[data-theme='dark'] .side-profile span { color:#8e959d; }
-      html[data-theme='dark'] .sidebar nav a { color:#9da3aa; }
-      html[data-theme='dark'] .sidebar nav a:hover { color:#f4f5f6; background:rgba(255,255,255,.05); }
-      html[data-theme='dark'] .sidebar nav a.active { color:#fff; background:rgba(255,255,255,.08); }
-      html[data-theme='dark'] .sidebar nav a.active::before { background:#f4f5f6; }
-      html[data-theme='dark'] .logout { color:#9299a1; }
-      html[data-theme='dark'] .logout:hover { color:#ffb1b1; background:#321d1f; }
-      html[data-theme='dark'] .dashboard-top { background:rgba(17,19,21,.86); border-color:var(--app-line); }
-      html[data-theme='dark'] .top-kicker { color:#858c94; }
-      html[data-theme='dark'] .public-link { background:#1c1f22; color:#c4c9ce; border-color:var(--app-line); }
-      html[data-theme='dark'] .metric-card,
-      html[data-theme='dark'] .appointment-card,
-      html[data-theme='dark'] .service-admin,
-      html[data-theme='dark'] .block-row,
-      html[data-theme='dark'] .hour-row { background:#191b1e; border-color:var(--app-line); }
-      html[data-theme='dark'] .metric-card::after { background:#25282c; }
-      html[data-theme='dark'] .appointment-card:hover,
-      html[data-theme='dark'] .service-admin:hover,
-      html[data-theme='dark'] .block-row:hover,
-      html[data-theme='dark'] .hour-row:hover { border-color:var(--app-line-strong); box-shadow:0 9px 22px rgba(0,0,0,.22); }
-      html[data-theme='dark'] .tabs { background:#1b1e21; border-color:var(--app-line); }
-      html[data-theme='dark'] .tabs button { color:#949ba3; }
-      html[data-theme='dark'] .tabs button.active { color:#f4f5f6; background:#292c30; box-shadow:none; }
-      html[data-theme='dark'] .small-action { background:#202328; color:#c0c5ca; border-color:var(--app-line); }
-      html[data-theme='dark'] .small-action.danger { color:#ffadad; }
-      html[data-theme='dark'] .copy-field { background:#1b1e21; border-color:var(--app-line-strong); }
-      html[data-theme='dark'] .copy-field span { color:#a7adb4; }
-      html[data-theme='dark'] .copy-field button { background:#292c30; color:#e7e9eb; }
-      html[data-theme='dark'] .hours-row > div[style] > div { border-color:var(--app-line) !important; }
-      html[data-theme='dark'] .empty { background:rgba(255,255,255,.025); border-color:rgba(255,255,255,.14); }
-      html[data-theme='dark'] .empty-icon,
-      html[data-theme='dark'] .link-card-icon { background:#25282c; }
-      html[data-theme='dark'] .empty p { color:#858c94; }
+      .dashboard-shell { background:#111315; }
+      .sidebar { background:rgba(25,27,30,.9); border-color:var(--app-line); }
+      .side-profile { background:rgba(255,255,255,.035); border-color:var(--app-line); }
+      .side-profile span { color:#8e959d; }
+      .sidebar nav a { color:#9da3aa; }
+      .sidebar nav a:hover { color:#f4f5f6; background:rgba(255,255,255,.05); }
+      .sidebar nav a.active { color:#fff; background:rgba(255,255,255,.08); }
+      .sidebar nav a.active::before { background:#f4f5f6; }
+      .logout { color:#9299a1; }
+      .logout:hover { color:#ffb1b1; background:#321d1f; }
+      .dashboard-top { background:rgba(17,19,21,.86); border-color:var(--app-line); }
+      .top-kicker { color:#858c94; }
+      .public-link { background:#1c1f22; color:#c4c9ce; border-color:var(--app-line); }
+      .metric-card,
+      .appointment-card,
+      .service-admin,
+      .block-row,
+      .hour-row { background:#191b1e; border-color:var(--app-line); }
+      .metric-card::after { background:#25282c; }
+      .appointment-card:hover,
+      .service-admin:hover,
+      .block-row:hover,
+      .hour-row:hover { border-color:var(--app-line-strong); box-shadow:0 9px 22px rgba(0,0,0,.22); }
+      .tabs { background:#1b1e21; border-color:var(--app-line); }
+      .tabs button { color:#949ba3; }
+      .tabs button.active { color:#f4f5f6; background:#292c30; box-shadow:none; }
+      .small-action { background:#202328; color:#c0c5ca; border-color:var(--app-line); }
+      .small-action.danger { color:#ffadad; }
+      .copy-field { background:#1b1e21; border-color:var(--app-line-strong); }
+      .copy-field span { color:#a7adb4; }
+      .copy-field button { background:#292c30; color:#e7e9eb; }
+      .hours-row > div[style] > div { border-color:var(--app-line) !important; }
+      .empty { background:rgba(255,255,255,.025); border-color:rgba(255,255,255,.14); }
+      .empty-icon,
+      .link-card-icon { background:#25282c; }
+      .empty p { color:#858c94; }
 
-      .theme-toggle { flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; padding:0; border:1px solid var(--ui-line); border-radius:10px; background:rgba(255,255,255,.7); color:var(--ui-ink); cursor:pointer; transition:transform .18s ease,background .18s ease,border-color .18s ease; }
-      .theme-toggle:hover { transform:translateY(-1px); background:var(--app-surface); border-color:var(--ui-line-strong); }
-      .theme-toggle:active { transform:scale(.96); }
-      html[data-theme='dark'] .theme-toggle { background:#1c1f22; color:#f4f5f6; }
-      .theme-toggle-label { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 
       @media (max-width: 900px) {
-        html[data-theme='dark'] .public-links { background:rgba(25,27,30,.98); border-color:var(--app-line); }
+        .public-links { background:rgba(25,27,30,.98); border-color:var(--app-line); }
       }
       /* FINAL PRODUCT UI — less decoration, more system */
       .brand { text-decoration:none !important; }
+      .brand-button { border:0; padding:0; margin:0; background:transparent; color:inherit; font:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:10px; }
       .brand-mark, .brand-dot { display:none !important; }
       .profile-image::before { display:none !important; }
       .button::after { display:none !important; }
@@ -3144,7 +3104,7 @@ function DesignSystem() {
       .field select { min-height:42px; width:100%; border:1px solid var(--app-line-strong); border-radius:8px; padding:0 12px; }
       .field input::placeholder, .field textarea::placeholder { color:var(--app-muted) !important; opacity:1; }
       .button-primary, .button-dark { background:var(--app-text) !important; color:var(--app-bg) !important; border-color:var(--app-text) !important; }
-      html[data-theme='dark'] .button-primary, html[data-theme='dark'] .button-dark { background:var(--app-text) !important; color:var(--app-bg) !important; }
+      .button-primary, .button-dark { background:var(--app-text) !important; color:var(--app-bg) !important; }
       .button-soft, .small-action { background:var(--app-surface) !important; color:var(--app-text) !important; border-color:var(--app-line-strong) !important; }
       .date-grid button, .slot-grid button { background:var(--app-surface) !important; color:var(--app-text-2) !important; border-color:var(--app-line-strong) !important; box-shadow:none !important; }
       .date-grid button.selected, .slot-grid button.selected { background:var(--app-text) !important; color:var(--app-bg) !important; border-color:var(--app-text) !important; box-shadow:none !important; }
@@ -3183,7 +3143,7 @@ function DesignSystem() {
   );
 }
 
-function App() {
+export default function App() {
   return (
     <>
       <DesignSystem />
@@ -3193,19 +3153,6 @@ function App() {
 }
 
 function AppContent() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const stored = window.localStorage.getItem('agenda-theme');
-    return stored === 'dark' ? 'dark' : 'light';
-  });
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem('agenda-theme', theme);
-  }, [theme]);
-
-  function toggleTheme() {
-    setTheme((current) => (current === 'light' ? 'dark' : 'light'));
-  }
 
   const [session, setSession] = useState<{
     user: { id: string };
@@ -3256,62 +3203,21 @@ function AppContent() {
     );
   }
 
-  if (
-    path === '/login' ||
-    path === '/cadastro'
-  ) {
-    return <AuthPage />;
+  if (path === '/cadastro') {
+    return <AuthPage initialMode="signup" />;
+  }
+
+  if (path === '/login') {
+    return <AuthPage initialMode="login" />;
   }
 
   if (path.startsWith('/dashboard')) {
     return session ? (
-      <Dashboard userId={session.user.id} onToggleTheme={toggleTheme} theme={theme} />
+      <Dashboard userId={session.user.id} />
     ) : (
       <AuthPage />
     );
   }
 
-  return (
-    <div className="home-page">
-      <Brand />
-
-      <div className="home-copy">
-        <div className="eyebrow">
-          Agenda simples para quem faz acontecer
-        </div>
-
-        <h1>
-          Seu trabalho merece uma agenda que acompanhe
-          seu ritmo.
-        </h1>
-
-        <p>
-          Um link bonito para suas clientes conhecerem
-          seus serviços e agendarem sem trocar dezenas
-          de mensagens.
-        </p>
-
-        <div className="home-actions">
-          <a
-            className="button button-primary"
-            href="/cadastro"
-          >
-            Criar minha página{' '}
-            <ArrowRight size={17} />
-          </a>
-
-          <a className="text-link" href="/login">
-            Já tenho uma conta
-          </a>
-        </div>
-      </div>
-
-      <div className="home-note">
-        <Check size={16} />
-        Sem mensalidade escondida no começo
-      </div>
-    </div>
-  );
+  return <AuthPage initialMode="signup" />;
 }
-
-export default App;
