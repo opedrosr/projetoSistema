@@ -176,7 +176,7 @@ function Brand() {
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       aria-label="Ir para o topo"
     >
-      <span>Apenas agenda</span>
+      <span>Agenda</span>
     </button>
   );
 }
@@ -615,7 +615,7 @@ function PublicNav({
             }}
           />
         ) : null}
-        <span>{custom.business_name || 'Apenas agenda'}</span>
+        <span>{custom.business_name || 'Agenda'}</span>
       </button>
 
       <div className={`public-links ${open ? 'open' : ''}`}>
