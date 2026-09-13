@@ -118,6 +118,15 @@ type PaymentService = Service & {
   deposit_amount?: number | null;
 };
 
+type PaymentAppointment = Omit<Appointment, 'service'> & {
+  payment_confirmed?: boolean | null;
+  service?: (Pick<Service, 'name'> & {
+    payment_type?: 'onsite' | 'deposit' | 'full' | null;
+    requires_deposit?: boolean | null;
+    deposit_amount?: number | null;
+  }) | null;
+};
+
 type PaymentProfile = CustomProfile;
 
 function Button({
@@ -176,7 +185,7 @@ function Brand() {
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       aria-label="Ir para o topo"
     >
-      <span>Agenda</span>
+      <span>Apenas agenda</span>
     </button>
   );
 }
@@ -615,7 +624,7 @@ function PublicNav({
             }}
           />
         ) : null}
-        <span>{custom.business_name || 'Agenda'}</span>
+        <span>{custom.business_name || 'Apenas agenda'}</span>
       </button>
 
       <div className={`public-links ${open ? 'open' : ''}`}>
@@ -1255,7 +1264,7 @@ function Overview({
         </div>
 
         {next ? (
-          <AppointmentCard appointment={next} />
+          <AppointmentCard appointment={next as PaymentAppointment} />
         ) : (
           <Empty
             title="Sua agenda está livre"
@@ -1294,20 +1303,35 @@ function Overview({
 function AppointmentCard({
   appointment,
   onCancel,
+  onTogglePayment,
 }: {
-  appointment: Appointment;
+  appointment: PaymentAppointment;
   onCancel?: () => void | Promise<void>;
+  onTogglePayment?: (
+    appointment: PaymentAppointment,
+  ) => void | Promise<void>;
 }) {
+  const paymentType =
+    appointment.service?.payment_type ||
+    (appointment.service?.requires_deposit
+      ? Number(appointment.service?.deposit_amount || 0) >=
+        Number(appointment.price || 0)
+        ? 'full'
+        : 'deposit'
+      : 'onsite');
+
+  const requiresPayment =
+    paymentType === 'deposit' || paymentType === 'full';
+
+  const paymentLabel =
+    paymentType === 'deposit' ? 'Sinal' : 'Pagamento';
+
   return (
     <div className="appointment-card">
       <div className="appointment-time">
-        <strong>
-          {brazilTime(appointment.starts_at)}
-        </strong>
+        <strong>{brazilTime(appointment.starts_at)}</strong>
 
-        <span>
-          {brazilShortDate(appointment.starts_at)}
-        </span>
+        <span>{brazilShortDate(appointment.starts_at)}</span>
       </div>
 
       <div className="appointment-info">
@@ -1329,11 +1353,36 @@ function AppointmentCard({
         </a>
       </div>
 
-      <div className="appointment-price">
-        {formatCurrency(appointment.price)}
+      <div className="appointment-actions">
+        <div className="appointment-price">
+          {formatCurrency(appointment.price)}
+        </div>
+
+        {requiresPayment && onTogglePayment && (
+          <button
+            type="button"
+            className={`payment-status-button ${
+              appointment.payment_confirmed
+                ? 'confirmed'
+                : 'pending'
+            }`}
+            onClick={() => onTogglePayment(appointment)}
+            title={
+              appointment.payment_confirmed
+                ? `${paymentLabel} confirmado. Clique para marcar como pendente.`
+                : `Marcar ${paymentLabel.toLowerCase()} como recebido`
+            }
+          >
+            <span className="payment-status-dot" />
+            {appointment.payment_confirmed
+              ? `${paymentLabel} recebido`
+              : `${paymentLabel} pendente`}
+          </button>
+        )}
 
         {onCancel && (
           <button
+            type="button"
             className="cancel-link"
             onClick={onCancel}
           >
@@ -1347,7 +1396,7 @@ function AppointmentCard({
 
 function Appointments({
   data,
-  setData
+  setData,
 }: {
   data: NonNullable<OwnerData>;
   setData: React.Dispatch<
@@ -1388,6 +1437,41 @@ function Appointments({
     }
   }
 
+  async function togglePayment(
+    appointment: PaymentAppointment,
+  ) {
+    const nextValue = !Boolean(appointment.payment_confirmed);
+
+    const { error } = await supabase
+      .from('appointments')
+      .update({ payment_confirmed: nextValue })
+      .eq('id', appointment.id)
+      .eq('professional_id', data.profile.id);
+
+    if (error) {
+      console.error(
+        'Erro ao atualizar status do pagamento:',
+        error,
+      );
+      alert(
+        'Não foi possível atualizar o status do pagamento.',
+      );
+      return;
+    }
+
+    setData({
+      ...data,
+      appointments: data.appointments.map((item) =>
+        item.id === appointment.id
+          ? ({
+              ...item,
+              payment_confirmed: nextValue,
+            } as Appointment)
+          : item,
+      ),
+    });
+  }
+
   return (
     <>
       <div className="page-title">
@@ -1424,10 +1508,15 @@ function Appointments({
             {appointments.map((appointment) => (
               <AppointmentCard
                 key={appointment.id}
-                appointment={appointment}
+                appointment={appointment as PaymentAppointment}
                 onCancel={
                   appointment.status === 'confirmed'
                     ? () => cancel(appointment.id)
+                    : undefined
+                }
+                onTogglePayment={
+                  appointment.status === 'confirmed'
+                    ? togglePayment
                     : undefined
                 }
               />
@@ -2912,6 +3001,14 @@ function DesignSystem() {
       @media (prefers-reduced-motion:reduce) {
         *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
       }
+
+      .appointment-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;min-width:150px}
+      .payment-status-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--app-line-strong,var(--border));border-radius:999px;padding:7px 10px;background:transparent;color:var(--app-muted,var(--muted));font:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:.18s ease}
+      .payment-status-button:hover{transform:translateY(-1px)}
+      .payment-status-button.confirmed{color:var(--app-text,#181818);background:var(--app-surface,#fff);border-color:var(--app-text,#181818)}
+      .payment-status-button.pending{color:var(--app-muted,#777);background:transparent}
+      .payment-status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+      @media (max-width:720px){.appointment-actions{align-items:flex-start;min-width:0;width:100%;margin-top:4px}.appointment-price{width:100%}.payment-status-button{width:max-content}}
 
       .service-payment-settings{margin:4px 0 18px;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--surface-muted,#f8f8f7)}
       .service-payment-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}

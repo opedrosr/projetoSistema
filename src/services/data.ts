@@ -211,7 +211,7 @@ export async function getOwnerData(userId: string) {
 
     supabase
       .from('appointments')
-      .select('*, service:services(name)')
+      .select('*, service:services(name, payment_type, requires_deposit, deposit_amount)')
       .eq('profile_id', userId)
       .order('starts_at'),
 
