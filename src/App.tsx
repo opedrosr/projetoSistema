@@ -1229,6 +1229,22 @@ function Overview({
     [data.appointments, data.services],
   );
 
+  const revenue = useMemo(() => {
+    const now = new Date();
+    const in7 = new Date(now);
+    in7.setDate(in7.getDate() + 7);
+    const in30 = new Date(now);
+    in30.setDate(in30.getDate() + 30);
+    const future = confirmedAppointments.filter((item) => new Date(item.starts_at) >= now);
+    const sum = (items: PaymentAppointment[]) =>
+      items.reduce((total, item) => total + Number(item.price || 0), 0);
+    return {
+      confirmed: sum(future),
+      next7: sum(future.filter((item) => new Date(item.starts_at) <= in7)),
+      next30: sum(future.filter((item) => new Date(item.starts_at) <= in30)),
+    };
+  }, [confirmedAppointments]);
+
   function openReturnMessage(item: ReturnRadarItem) {
     setSelectedReturn(item);
     setReturnMessage(generateReturnMessage(item));
@@ -1303,6 +1319,22 @@ function Overview({
           <p>oportunidades de follow-up</p>
         </div>
       </div>
+
+      <section className="dashboard-section intelligence-revenue overview-revenue">
+        <div className="section-heading">
+          <div>
+            <div className="eyebrow">Financeiro</div>
+            <h2>Previsão de faturamento</h2>
+          </div>
+          <a className="text-link" href="/dashboard/previsao-faturamento">Ver detalhes <ArrowRight size={15} /></a>
+        </div>
+        <div className="intelligence-revenue-grid">
+          <div><span>Agendado</span><strong>{formatCurrency(revenue.confirmed)}</strong><small>futuro confirmado</small></div>
+          <div><span>Próximos 7 dias</span><strong>{formatCurrency(revenue.next7)}</strong><small>já reservado</small></div>
+          <div><span>Próximos 30 dias</span><strong>{formatCurrency(revenue.next30)}</strong><small>já reservado</small></div>
+          <div><span>Oportunidades</span><strong>{radar.noNext.length}</strong><small>clientes sem próximo agendamento</small></div>
+        </div>
+      </section>
 
       <section className="dashboard-section return-radar-section">
         <div className="section-heading">
@@ -1624,16 +1656,21 @@ function IntelligencePage({
         </section>
       )}
 
-      {mode === 'revenue' && (
-        <section className="dashboard-section intelligence-revenue">
-          <div className="intelligence-revenue-grid">
+      <section className="dashboard-section intelligence-revenue">
+        <div className="section-heading">
+          <div>
+            <div className="eyebrow">Financeiro</div>
+            <h2>Previsão de faturamento</h2>
+          </div>
+          <span>Visão futura</span>
+        </div>
+        <div className="intelligence-revenue-grid">
             <div><span>Agendado</span><strong>{formatCurrency(revenue.confirmed)}</strong><small>futuro confirmado</small></div>
             <div><span>Próximos 7 dias</span><strong>{formatCurrency(revenue.next7)}</strong><small>já reservado</small></div>
             <div><span>Próximos 30 dias</span><strong>{formatCurrency(revenue.next30)}</strong><small>já reservado</small></div>
             <div><span>Oportunidade</span><strong>{formatCurrency(revenue.returnOpportunity)}</strong><small>potencial de retorno</small></div>
           </div>
         </section>
-      )}
 
       {mode === 'empty' && (
         <section className="dashboard-section intelligence-empty-slots">
@@ -3809,6 +3846,252 @@ function DesignSystem() {
       .intelligence-customer-main { flex:1; display:flex; align-items:center; gap:12px; border:0; background:none; color:inherit; text-align:left; cursor:pointer; padding:0; font:inherit; }
       .intelligence-customer > .return-radar-message { flex:0 0 auto; }
       .radar-group.no-next.expanded { margin-top:14px; }
+
+      /* MOBILE / CLARITY FIXES */
+      .service-card::before { display:none !important; }
+
+      /* Remove decorative status dots / color treatment from return radar */
+      .return-radar-summary .return-radar-stat::before,
+      .return-radar-summary .return-radar-stat::after,
+      .return-radar-summary .overdue::before,
+      .return-radar-summary .upcoming::before,
+      .return-radar-summary .no-next::before { display:none !important; content:none !important; }
+      .return-radar-summary .return-radar-stat { grid-template-columns:1fr !important; }
+      .return-radar-summary .return-radar-stat span { display:none !important; }
+
+      /* Perfil 360º: never allow content to escape the mobile viewport */
+      .customer-profile-modal {
+        width:min(620px, calc(100vw - 20px)) !important;
+        max-width:calc(100vw - 20px) !important;
+        box-sizing:border-box !important;
+        overflow-x:hidden !important;
+      }
+      .customer-profile-modal * { max-width:100%; box-sizing:border-box; }
+      .customer-profile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); min-width:0; }
+      .customer-profile-grid > div { min-width:0; overflow:hidden; }
+      .customer-profile-grid strong { min-width:0; overflow-wrap:anywhere; word-break:break-word; }
+      .customer-history { min-width:0; }
+      .customer-history > div { min-width:0; grid-template-columns:minmax(62px,auto) minmax(0,1fr) auto; }
+      .customer-history > div strong,
+      .customer-history > div b { min-width:0; overflow-wrap:anywhere; word-break:break-word; }
+
+      /* Blocks: date/time fields stay inside the card on narrow screens */
+      .form-card .field input[type='datetime-local'] {
+        width:100% !important;
+        min-width:0 !important;
+        max-width:100% !important;
+        box-sizing:border-box !important;
+        display:block;
+      }
+      .block-list, .block-row, .block-row > div { min-width:0; max-width:100%; }
+      .block-row { overflow:hidden; }
+      .block-row > div:first-child, .block-row > div:last-child { min-width:0; }
+      .block-row span, .block-row strong { overflow-wrap:anywhere; word-break:break-word; }
+
+      /* Services: prevent text/button collisions and keep Editar inside its button */
+      .service-admin { min-width:0; overflow:hidden; }
+      .service-admin > div:first-child { min-width:0; flex:1 1 auto; overflow:hidden; }
+      .service-admin > div:first-child strong,
+      .service-admin > div:first-child span { display:block; min-width:0; overflow-wrap:anywhere; word-break:break-word; }
+      .service-admin > div:last-child { flex:0 0 auto; min-width:0; }
+      .service-admin > div:last-child .small-action {
+        width:auto !important;
+        min-width:0 !important;
+        max-width:100%;
+        padding:7px 9px !important;
+        white-space:nowrap;
+        overflow:hidden;
+        box-sizing:border-box;
+      }
+      .service-admin > div:last-child .small-action:first-child { width:52px !important; }
+      .service-admin > div:last-child .small-action.danger { width:34px !important; }
+
+      @media (max-width:640px) {
+        .customer-profile-modal {
+          width:calc(100vw - 16px) !important;
+          max-width:calc(100vw - 16px) !important;
+          padding:14px !important;
+          max-height:calc(100vh - 16px) !important;
+        }
+        .customer-profile-grid { grid-template-columns:1fr 1fr; gap:6px; }
+        .customer-profile-grid > div { padding:9px 8px; }
+        .customer-history > div { grid-template-columns:58px minmax(0,1fr); gap:5px; }
+        .customer-history > div b { grid-column:2; justify-self:start; }
+        .return-message-actions { grid-template-columns:1fr !important; }
+
+        .block-list + .form-card, .two-column > .form-card { min-width:0; }
+        .two-column { min-width:0; }
+        .time-inputs { width:100% !important; min-width:0 !important; }
+        .time-inputs input { min-width:0 !important; width:0 !important; flex:1 1 0 !important; }
+
+        .service-admin { align-items:center; gap:8px; padding:10px !important; }
+        .service-admin > div:first-child { max-width:calc(100% - 92px); }
+        .service-admin > div:last-child { width:86px; display:flex; justify-content:flex-end; gap:4px; }
+        .service-admin > div:last-child .small-action:first-child { width:48px !important; padding:6px 5px !important; font-size:9px !important; }
+        .service-admin > div:last-child .small-action.danger { width:32px !important; padding:6px !important; }
+      }
+
+      .intelligence-revenue-grid { min-width:0; }
+      .intelligence-revenue-grid > div { min-width:0; overflow:hidden; }
+      .intelligence-revenue-grid strong { overflow-wrap:anywhere; word-break:break-word; }
+      @media (max-width:640px) {
+        .intelligence-revenue-grid { grid-template-columns:1fr 1fr !important; }
+        .intelligence-revenue-grid > div { padding:10px 9px; }
+        .intelligence-revenue-grid strong { font-size:17px; }
+      }
+
+      /* FINAL MOBILE-FIRST CLARITY FIXES */
+      .overview-revenue { margin-bottom:14px; }
+      .overview-revenue .section-heading { min-width:0; }
+      .overview-revenue .section-heading > div { min-width:0; }
+      .overview-revenue .section-heading h2 { overflow-wrap:anywhere; }
+
+      .customer-profile-modal {
+        width:min(620px, calc(100vw - 24px)) !important;
+        max-width:calc(100vw - 24px) !important;
+        min-width:0 !important;
+        box-sizing:border-box !important;
+        overflow-x:hidden !important;
+      }
+      .customer-profile-modal > * { min-width:0; max-width:100%; }
+      .customer-profile-grid {
+        width:100% !important;
+        min-width:0 !important;
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      }
+      .customer-profile-grid > div { min-width:0 !important; overflow:hidden; }
+      .customer-profile-grid strong,
+      .customer-profile-modal p,
+      .customer-profile-modal span,
+      .customer-profile-modal strong,
+      .customer-profile-modal b {
+        min-width:0;
+        max-width:100%;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+      }
+      .customer-history { width:100%; min-width:0; }
+      .customer-history > div {
+        width:100%;
+        min-width:0 !important;
+        box-sizing:border-box;
+        grid-template-columns:minmax(58px,auto) minmax(0,1fr) auto !important;
+      }
+      .customer-history > div > * { min-width:0; }
+
+      .intelligence-customer { min-width:0; width:100%; box-sizing:border-box; }
+      .intelligence-customer-main { min-width:0; width:100%; }
+      .intelligence-customer-main > div { min-width:0; max-width:100%; }
+      .intelligence-customer-main strong,
+      .intelligence-customer-main span,
+      .intelligence-customer-main small { overflow-wrap:anywhere; word-break:break-word; }
+      .return-radar-card { min-width:0; box-sizing:border-box; }
+      .return-radar-main { min-width:0; max-width:100%; }
+      .return-radar-main > strong, .return-radar-main > span, .return-radar-main > small, .return-radar-main > b { overflow-wrap:anywhere; word-break:break-word; }
+
+      .form-card { min-width:0; box-sizing:border-box; }
+      .form-card .field,
+      .form-card .field input,
+      .form-card .field textarea,
+      .form-card .field select { min-width:0; max-width:100%; box-sizing:border-box; }
+      .form-card .field input[type='datetime-local'] {
+        width:100% !important;
+        min-width:0 !important;
+        max-width:100% !important;
+        display:block;
+        font-size:16px;
+        padding-left:11px;
+        padding-right:8px;
+      }
+
+      .service-admin {
+        display:grid !important;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:center;
+        min-width:0;
+        width:100%;
+        box-sizing:border-box;
+      }
+      .service-admin > div:first-child { min-width:0 !important; width:100%; overflow:hidden; }
+      .service-admin > div:first-child strong,
+      .service-admin > div:first-child span {
+        display:block;
+        min-width:0;
+        max-width:100%;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+      }
+      .service-admin > div:last-child {
+        display:flex !important;
+        align-items:center;
+        justify-content:flex-end;
+        flex:none !important;
+        width:auto !important;
+        min-width:0 !important;
+        gap:5px;
+      }
+      .service-admin > div:last-child .small-action {
+        display:inline-flex !important;
+        align-items:center;
+        justify-content:center;
+        flex:none !important;
+        box-sizing:border-box !important;
+        height:34px !important;
+        min-height:34px !important;
+        margin:0 !important;
+        padding:0 9px !important;
+        line-height:1 !important;
+        white-space:nowrap !important;
+        overflow:hidden !important;
+        text-overflow:clip !important;
+      }
+      .service-admin > div:last-child .small-action:first-child { width:54px !important; min-width:54px !important; }
+      .service-admin > div:last-child .small-action.danger { width:34px !important; min-width:34px !important; padding:0 !important; }
+
+      /* Remove the decorative quarter-circle from service cards on the public client page. */
+      .public-shell .service-card::before { display:none !important; content:none !important; }
+
+      @media (max-width:640px) {
+        .dashboard-content { overflow-x:hidden; }
+        .overview-revenue .section-heading { align-items:flex-start; flex-direction:column; gap:8px; }
+        .overview-revenue .section-heading .text-link { align-self:flex-start; }
+        .intelligence-revenue-grid { grid-template-columns:1fr 1fr !important; width:100%; }
+        .intelligence-revenue-grid > div { min-width:0; overflow:hidden; }
+        .intelligence-revenue-grid strong { font-size:16px !important; overflow-wrap:anywhere; }
+
+        .customer-profile-modal {
+          width:calc(100vw - 16px) !important;
+          max-width:calc(100vw - 16px) !important;
+          padding:13px !important;
+        }
+        .customer-profile-grid { grid-template-columns:1fr !important; gap:6px; }
+        .customer-history > div {
+          grid-template-columns:1fr !important;
+          align-items:flex-start;
+          gap:3px;
+          padding:9px;
+        }
+        .customer-history > div b { grid-column:auto !important; justify-self:start; }
+
+        .block-list, .block-row { width:100%; min-width:0; }
+        .block-row { display:grid !important; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+        .block-row > div { min-width:0; max-width:100%; }
+        .block-row > div:last-child { display:flex; align-items:center; gap:6px; }
+        .block-row span, .block-row strong { overflow-wrap:anywhere; word-break:break-word; }
+        .two-column > .form-card { width:100%; min-width:0; }
+
+        .service-admin { grid-template-columns:minmax(0,1fr) 91px !important; gap:7px !important; padding:10px !important; }
+        .service-admin > div:last-child { width:91px !important; }
+        .service-admin > div:first-child strong { font-size:12px; line-height:1.25; }
+        .service-admin > div:first-child span { font-size:10px; line-height:1.35; }
+        .service-admin > div:last-child .small-action:first-child { width:52px !important; min-width:52px !important; height:32px !important; min-height:32px !important; padding:0 !important; font-size:9px !important; }
+        .service-admin > div:last-child .small-action.danger { width:32px !important; min-width:32px !important; height:32px !important; min-height:32px !important; }
+
+        .form-card .form-row { grid-template-columns:1fr !important; }
+        .form-card .service-payment-settings { min-width:0; width:100%; box-sizing:border-box; }
+        .service-payment-settings .field select { width:100% !important; min-width:0 !important; }
+      }
+
     `}</style>
   );
 }
