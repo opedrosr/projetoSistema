@@ -1656,21 +1656,23 @@ function IntelligencePage({
         </section>
       )}
 
-      <section className="dashboard-section intelligence-revenue">
-        <div className="section-heading">
-          <div>
-            <div className="eyebrow">Financeiro</div>
-            <h2>Previsão de faturamento</h2>
+      {mode === 'revenue' && (
+        <section className="dashboard-section intelligence-revenue">
+          <div className="section-heading">
+            <div>
+              <div className="eyebrow">Financeiro</div>
+              <h2>Previsão de faturamento</h2>
+            </div>
+            <span>Visão futura</span>
           </div>
-          <span>Visão futura</span>
-        </div>
-        <div className="intelligence-revenue-grid">
+          <div className="intelligence-revenue-grid">
             <div><span>Agendado</span><strong>{formatCurrency(revenue.confirmed)}</strong><small>futuro confirmado</small></div>
             <div><span>Próximos 7 dias</span><strong>{formatCurrency(revenue.next7)}</strong><small>já reservado</small></div>
             <div><span>Próximos 30 dias</span><strong>{formatCurrency(revenue.next30)}</strong><small>já reservado</small></div>
             <div><span>Oportunidade</span><strong>{formatCurrency(revenue.returnOpportunity)}</strong><small>potencial de retorno</small></div>
           </div>
         </section>
+      )}
 
       {mode === 'empty' && (
         <section className="dashboard-section intelligence-empty-slots">
@@ -1688,13 +1690,11 @@ function IntelligencePage({
               <div><span>WhatsApp</span><strong>{selectedCustomer.whatsapp || 'Não cadastrado'}</strong></div>
               <div><span>Atendimentos</span><strong>{selectedCustomer.totalAppointments}</strong></div>
               <div><span>Último serviço</span><strong>{selectedCustomer.lastService}</strong></div>
-              <div><span>Último valor</span><strong>{formatCurrency(selectedCustomer.lastPrice)}</strong></div>
-              <div><span>Ticket médio</span><strong>{formatCurrency(selectedCustomer.averageTicket)}</strong></div>
               <div><span>Retorno habitual</span><strong>{selectedCustomer.averageInterval === null ? 'Ainda sem padrão' : `${Math.round(selectedCustomer.averageInterval)} dias`}</strong></div>
               <div><span>Sem agendar</span><strong>{selectedCustomer.daysSinceLast} dias</strong></div>
               <div><span>Último atendimento</span><strong>{brazilShortDate(selectedCustomer.lastAppointmentAt)}</strong></div>
             </div>
-            <div className="customer-history"><span className="eyebrow">Histórico recente</span>{selectedCustomer.appointments.slice(-5).reverse().map((appointment) => <div key={appointment.id}><span>{brazilShortDate(appointment.starts_at)}</span><strong>{appointment.service?.name || 'Serviço'}</strong><b>{formatCurrency(Number(appointment.price || 0))}</b></div>)}</div>
+            <div className="customer-history"><span className="eyebrow">Histórico recente</span>{selectedCustomer.appointments.slice(-5).reverse().map((appointment) => <div key={appointment.id}><span>{brazilShortDate(appointment.starts_at)}</span><strong>{appointment.service?.name || 'Serviço'}</strong></div>)}</div>
             <div className="return-message-actions"><button type="button" className="button button-soft" onClick={() => setSelectedCustomer(null)}>Fechar</button>{selectedCustomer.whatsapp && <button type="button" className="button button-primary" onClick={() => openCustomerWhatsApp(selectedCustomer)}><MessageCircle size={17} /> Chamar no WhatsApp</button>}</div>
           </div>
         </div>
@@ -1754,7 +1754,7 @@ function CustomerListPage({
   }) => void;
 }) {
   if (!customers.length) return <section className="dashboard-section"><div className="intelligence-empty">{emptyText}</div></section>;
-  return <section className="dashboard-section intelligence-list-section"><div className="intelligence-customer-list">{customers.map((customer) => <div className="intelligence-customer" key={customer.key}><button type="button" className="intelligence-customer-main" onClick={() => onSelect(customer)}><div><strong>{customer.name}</strong><span>{customer.lastService} · último atendimento {brazilShortDate(customer.lastAppointmentAt)}</span><small>{customer.daysSinceLast} dias desde o último · ticket médio {formatCurrency(customer.averageTicket)}</small></div><ArrowRight size={16} /></button>{customer.whatsapp && <button type="button" className="return-radar-message" onClick={() => onWhatsApp(customer)}><MessageCircle size={15} /> WhatsApp</button>}</div>)}</div></section>;
+  return <section className="dashboard-section intelligence-list-section"><div className="intelligence-customer-list">{customers.map((customer) => <div className="intelligence-customer" key={customer.key}><button type="button" className="intelligence-customer-main" onClick={() => onSelect(customer)}><div><strong>{customer.name}</strong><span>{customer.lastService} · último atendimento {brazilShortDate(customer.lastAppointmentAt)}</span><small>{customer.daysSinceLast} dias desde o último atendimento</small></div><ArrowRight size={16} /></button>{customer.whatsapp && <button type="button" className="return-radar-message" onClick={() => onWhatsApp(customer)}><MessageCircle size={15} /> WhatsApp</button>}</div>)}</div></section>;
 }
 
 function AppointmentCard({
