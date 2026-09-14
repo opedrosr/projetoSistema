@@ -101,6 +101,12 @@ const navItems = [
   ['/dashboard/servicos', 'Serviços'],
   ['/dashboard/horarios', 'Horários'],
   ['/dashboard/bloqueios', 'Bloqueios'],
+  ['/dashboard/clientes-sumidos', 'Clientes sumidos'],
+  ['/dashboard/clientes-em-risco', 'Clientes em risco'],
+  ['/dashboard/agenda-vazia', 'Agenda vazia'],
+  ['/dashboard/perfil-360', 'Perfil 360º'],
+  ['/dashboard/o-que-fazer-hoje', 'O que fazer hoje'],
+  ['/dashboard/previsao-faturamento', 'Previsão de faturamento'],
   ['/dashboard/perfil', 'Meu perfil'],
 ];
 
@@ -1101,6 +1107,14 @@ function DashboardLayout({
                 <Clock3 size={17} />
               ) : label === 'Bloqueios' ? (
                 <Settings2 size={17} />
+              ) : label === 'Clientes sumidos' || label === 'Clientes em risco' || label === 'Perfil 360º' ? (
+                <UserRound size={17} />
+              ) : label === 'Agenda vazia' ? (
+                <Clock3 size={17} />
+              ) : label === 'O que fazer hoje' ? (
+                <Check size={17} />
+              ) : label === 'Previsão de faturamento' ? (
+                <Settings2 size={17} />
               ) : (
                 <UserRound size={17} />
               )}
@@ -1149,6 +1163,13 @@ function DashboardLayout({
         <main className="dashboard-content">
           {page === 'overview' && <Overview data={data} />}
 
+          {page === 'clientes-sumidos' && <IntelligencePage data={data} mode="lost" />}
+          {page === 'clientes-em-risco' && <IntelligencePage data={data} mode="risk" />}
+          {page === 'agenda-vazia' && <IntelligencePage data={data} mode="empty" />}
+          {page === 'perfil-360' && <IntelligencePage data={data} mode="profile" />}
+          {page === 'o-que-fazer-hoje' && <IntelligencePage data={data} mode="today" />}
+          {page === 'previsao-faturamento' && <IntelligencePage data={data} mode="revenue" />}
+
           {page === 'agendamentos' && (
             <Appointments
               data={data}
@@ -1188,7 +1209,7 @@ function Overview({
   const today = dateKey(new Date());
   const [selectedReturn, setSelectedReturn] = useState<ReturnRadarItem | null>(null);
   const [returnMessage, setReturnMessage] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+  const [showNoNext, setShowNoNext] = useState(false);
 
   const confirmedAppointments = useMemo(
     () => data.appointments.filter((item) => item.status === 'confirmed'),
@@ -1208,276 +1229,6 @@ function Overview({
     [data.appointments, data.services],
   );
 
-  const customerProfiles = useMemo(() => {
-    type Customer = {
-      key: string;
-      name: string;
-      whatsapp: string;
-      totalAppointments: number;
-      lastAppointmentAt: string;
-      lastService: string;
-      lastPrice: number;
-      averageTicket: number;
-      averageInterval: number | null;
-      daysSinceLast: number;
-      status: 'nova' | 'recorrente' | 'risco' | 'sumida';
-      appointments: PaymentAppointment[];
-    };
-
-    const groups = new Map<string, PaymentAppointment[]>();
-    const normalize = (value: string) =>
-      value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const keyFor = (item: PaymentAppointment) =>
-      item.customer_whatsapp?.replace(/\D/g, '') || normalize(item.customer_name);
-
-    confirmedAppointments
-      .filter((item) => new Date(item.starts_at) <= new Date())
-      .forEach((item) => {
-        const key = keyFor(item);
-        const current = groups.get(key) || [];
-        groups.set(key, [...current, item]);
-      });
-
-    const now = new Date();
-
-    return Array.from(groups.entries()).map(([key, items]) => {
-      const sorted = [...items].sort(
-        (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
-      );
-      const last = sorted[sorted.length - 1];
-      const intervals: number[] = [];
-
-      for (let i = 1; i < sorted.length; i += 1) {
-        const diff =
-          (new Date(sorted[i].starts_at).getTime() -
-            new Date(sorted[i - 1].starts_at).getTime()) /
-          86400000;
-        if (diff >= 7 && diff <= 180) intervals.push(diff);
-      }
-
-      const averageInterval = intervals.length
-        ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length
-        : null;
-
-      const daysSinceLast = Math.max(
-        0,
-        Math.floor(
-          (now.getTime() - new Date(last.starts_at).getTime()) / 86400000,
-        ),
-      );
-
-      let status: Customer['status'] = sorted.length === 1 ? 'nova' : 'recorrente';
-
-      if (sorted.length >= 2 && averageInterval !== null) {
-        if (daysSinceLast > averageInterval + 14) status = 'sumida';
-        else if (daysSinceLast > averageInterval) status = 'risco';
-      }
-
-      return {
-        key,
-        name: last.customer_name || 'Cliente',
-        whatsapp: last.customer_whatsapp || '',
-        totalAppointments: sorted.length,
-        lastAppointmentAt: last.starts_at,
-        lastService: last.service?.name || 'Serviço',
-        lastPrice: Number(last.price || 0),
-        averageTicket:
-          sorted.reduce((sum, item) => sum + Number(item.price || 0), 0) /
-          sorted.length,
-        averageInterval,
-        daysSinceLast,
-        status,
-        appointments: sorted,
-      };
-    });
-  }, [confirmedAppointments]);
-
-  const lostCustomers = useMemo(
-    () =>
-      customerProfiles
-        .filter((item) => item.status === 'sumida')
-        .sort((a, b) => b.daysSinceLast - a.daysSinceLast),
-    [customerProfiles],
-  );
-
-  const atRiskCustomers = useMemo(
-    () =>
-      customerProfiles
-        .filter((item) => item.status === 'risco')
-        .sort((a, b) => b.daysSinceLast - a.daysSinceLast),
-    [customerProfiles],
-  );
-
-  const revenue = useMemo(() => {
-    const now = new Date();
-    const in7 = new Date(now);
-    in7.setDate(in7.getDate() + 7);
-    const in30 = new Date(now);
-    in30.setDate(in30.getDate() + 30);
-
-    const future = confirmedAppointments.filter(
-      (item) => new Date(item.starts_at) >= now,
-    );
-
-    const sum = (items: PaymentAppointment[]) =>
-      items.reduce((total, item) => total + Number(item.price || 0), 0);
-
-    const next7 = future.filter((item) => new Date(item.starts_at) <= in7);
-    const next30 = future.filter((item) => new Date(item.starts_at) <= in30);
-
-    const returnOpportunity = customerProfiles
-  .filter((item) => item.status === 'sumida' || item.status === 'risco')
-  .reduce((total, item) => total + Number(item.averageTicket || 0), 0);
-    return {
-      confirmed: sum(future),
-      next7: sum(next7),
-      next30: sum(next30),
-      returnOpportunity,
-    };
-  }, [confirmedAppointments, radar, customerProfiles]);
-
-  const emptySlots = useMemo(() => {
-    const results: Array<{
-      startsAt: string;
-      customer: any;
-      reason: string;
-    }> = [];
-
-    const now = new Date();
-
-    for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
-      const date = new Date();
-      date.setHours(12, 0, 0, 0);
-      date.setDate(date.getDate() + dayOffset);
-
-      const dayOfWeek = date.getDay();
-      const hour = data.hours.find(
-        (item) => item.day_of_week === dayOfWeek && item.is_open,
-      );
-
-      if (!hour?.start_time || !hour?.end_time) continue;
-
-      const available = data.availability
-        .filter(
-          (slot) =>
-            slot.day_of_week === dayOfWeek &&
-            slot.active &&
-            slot.start_time,
-        )
-        .sort((a, b) => a.start_time.localeCompare(b.start_time));
-
-      for (const slot of available) {
-        const startsAt = new Date(
-          `${brazilDateKey(date)}T${slot.start_time.slice(0, 5)}:00-03:00`,
-        );
-
-        if (startsAt <= now) continue;
-
-        const occupied = confirmedAppointments.some((appointment) => {
-          const appointmentStart = new Date(appointment.starts_at);
-          const appointmentEnd = new Date(
-            appointment.ends_at || appointment.starts_at,
-          );
-          return appointmentStart < new Date(startsAt.getTime() + 30 * 60000) &&
-            appointmentEnd > startsAt;
-        });
-
-        const blocked = data.blocks.some((block) => {
-          const blockStart = new Date(block.starts_at);
-          const blockEnd = new Date(block.ends_at);
-          return blockStart < new Date(startsAt.getTime() + 30 * 60000) &&
-            blockEnd > startsAt;
-        });
-
-        if (occupied || blocked) continue;
-
-        const customer = [...customerProfiles]
-          .filter(
-            (item) =>
-              item.whatsapp &&
-              item.totalAppointments >= 2 &&
-              item.averageInterval !== null &&
-              item.daysSinceLast >= Math.max(0, item.averageInterval - 5),
-          )
-          .sort((a, b) => {
-            const aDistance = Math.abs(
-              (a.averageInterval || 0) - a.daysSinceLast,
-            );
-            const bDistance = Math.abs(
-              (b.averageInterval || 0) - b.daysSinceLast,
-            );
-            return aDistance - bDistance;
-          })[0];
-
-        if (customer) {
-          results.push({
-            startsAt: startsAt.toISOString(),
-            customer,
-            reason:
-              customer.daysSinceLast > (customer.averageInterval || 0)
-                ? 'Cliente já passou do intervalo habitual de retorno.'
-                : 'Retorno habitual desta cliente está próximo.',
-          });
-        }
-      }
-    }
-
-    return results.slice(0, 5);
-  }, [data.availability, data.blocks, data.hours, confirmedAppointments, customerProfiles]);
-
-  const actions = useMemo(() => {
-    const result: Array<{
-      title: string;
-      text: string;
-      action: string;
-      customer?: any;
-      href?: string;
-    }> = [];
-
-    if (radar.overdue.length) {
-      result.push({
-        title: `${radar.overdue.length} cliente${radar.overdue.length > 1 ? 's' : ''} atrasada${radar.overdue.length > 1 ? 's' : ''}`,
-        text: 'Há clientes que já passaram do período habitual de retorno.',
-        action: 'Ver clientes',
-      });
-    }
-
-    if (emptySlots.length) {
-      result.push({
-        title: `${emptySlots.length} horário${emptySlots.length > 1 ? 's' : ''} livre${emptySlots.length > 1 ? 's' : ''}`,
-        text: 'Você pode tentar preencher esses horários antes que fiquem ociosos.',
-        action: 'Ver oportunidades',
-      });
-    }
-
-    if (lostCustomers.length) {
-      result.push({
-        title: `${lostCustomers.length} cliente${lostCustomers.length > 1 ? 's' : ''} sumida${lostCustomers.length > 1 ? 's' : ''}`,
-        text: 'Vale retomar o contato enquanto a cliente ainda conhece seu trabalho.',
-        action: 'Chamar clientes',
-      });
-    }
-
-    if (atRiskCustomers.length) {
-      result.push({
-        title: `${atRiskCustomers.length} cliente${atRiskCustomers.length > 1 ? 's' : ''} em risco`,
-        text: 'Algumas clientes estão chegando ou já passaram do intervalo habitual.',
-        action: 'Ver clientes',
-      });
-    }
-
-    if (!result.length) {
-      result.push({
-        title: 'Agenda sob controle',
-        text: 'Não há nenhuma ação urgente identificada agora.',
-        action: 'Ver agenda',
-        href: '/dashboard/agendamentos',
-      });
-    }
-
-    return result.slice(0, 4);
-  }, [radar, emptySlots, lostCustomers, atRiskCustomers]);
-
   function openReturnMessage(item: ReturnRadarItem) {
     setSelectedReturn(item);
     setReturnMessage(generateReturnMessage(item));
@@ -1495,44 +1246,6 @@ function Overview({
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
-  function openCustomerWhatsApp(customer: any) {
-    if (!customer?.whatsapp?.trim()) return;
-
-    const message =
-      customer.status === 'sumida'
-        ? `Oi, ${customer.name}! Tudo bem? 😊 Vi aqui que já faz um tempinho desde seu último atendimento de ${customer.lastService}. Queria saber se você gostaria de agendar novamente.`
-        : `Oi, ${customer.name}! Tudo bem? 😊 Seu próximo atendimento costuma acontecer por volta de agora. Se quiser, posso te passar os horários disponíveis.`;
-
-    const url = whatsappUrl(customer.whatsapp, message);
-    if (url !== '#') window.open(url, '_blank', 'noopener,noreferrer');
-  }
-
-  function customerStatusLabel(status: string) {
-    if (status === 'nova') return 'Nova cliente';
-    if (status === 'recorrente') return 'Recorrente';
-    if (status === 'risco') return 'Em risco';
-    return 'Sumida';
-  }
-
-  function formatInterval(value: number | null) {
-    return value === null
-      ? 'Ainda sem padrão'
-      : `${Math.round(value)} dias`;
-  }
-
-  function formatDays(value: number) {
-    return `${value} ${value === 1 ? 'dia' : 'dias'}`;
-  }
-
-  function formatReturnDate(value: string) {
-    const date = new Date(`${value}T12:00:00Z`);
-    return date.toLocaleDateString('pt-BR', {
-      timeZone: 'UTC',
-      day: '2-digit',
-      month: '2-digit',
-    });
-  }
-
   function returnStatusText(item: ReturnRadarItem) {
     if (item.status === 'overdue') {
       return `${item.daysOverdue} ${item.daysOverdue === 1 ? 'dia' : 'dias'} atrasada`;
@@ -1545,31 +1258,18 @@ function Overview({
     return `Retorno previsto: ${formatReturnDate(item.expectedReturnAt)}`;
   }
 
-  const radarGroups = [
-    {
-      key: 'overdue',
-      title: 'Clientes atrasadas',
-      eyebrow: 'Precisa de atenção',
-      items: radar.overdue,
-      className: 'radar-group overdue',
-      icon: '🔴',
-    },
-    {
-      key: 'upcoming',
-      title: 'Próximas do retorno',
-      eyebrow: 'Próximos dias',
-      items: radar.upcoming,
-      className: 'radar-group upcoming',
-      icon: '🟡',
-    },
-    {
-      key: 'no_next',
-      title: 'Sem próximo agendamento',
-      eyebrow: 'Oportunidades',
-      items: radar.noNext,
-      className: 'radar-group no-next',
-      icon: '⚪',
-    },
+  function formatReturnDate(value: string) {
+    const date = new Date(`${value}T12:00:00Z`);
+    return date.toLocaleDateString('pt-BR', {
+      timeZone: 'UTC',
+      day: '2-digit',
+      month: '2-digit',
+    });
+  }
+
+  const groups = [
+    { key: 'overdue', title: 'Clientes atrasadas', eyebrow: 'Precisa de atenção', items: radar.overdue, className: 'radar-group overdue' },
+    { key: 'upcoming', title: 'Próximas do retorno', eyebrow: 'Próximos dias', items: radar.upcoming, className: 'radar-group upcoming' },
   ];
 
   return (
@@ -1586,36 +1286,6 @@ function Overview({
         </a>
       </div>
 
-      <section className="dashboard-section intelligence-today">
-        <div className="section-heading">
-          <div>
-            <div className="eyebrow">Inteligência</div>
-            <h2>O que fazer hoje?</h2>
-          </div>
-          <span>{actions.length} prioridades</span>
-        </div>
-
-        <div className="intelligence-actions">
-          {actions.map((item) => (
-            <div className="intelligence-action" key={item.title}>
-              <div>
-                <strong>{item.title}</strong>
-                <p>{item.text}</p>
-              </div>
-              {item.customer ? (
-                <button type="button" className="small-action" onClick={() => setSelectedCustomer(item.customer)}>
-                  Ver
-                </button>
-              ) : (
-                <a className="small-action intelligence-action-link" href={item.href || '/dashboard/agendamentos'}>
-                  {item.action}
-                </a>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
       <div className="overview-grid">
         <div className="metric-card warm">
           <span>Hoje</span>
@@ -1623,32 +1293,16 @@ function Overview({
           <p>{todays.length === 1 ? 'agendamento marcado' : 'agendamentos marcados'}</p>
         </div>
         <div className="metric-card">
-          <span>Clientes recorrentes</span>
-          <strong>{customerProfiles.filter((item) => item.status !== 'nova').length}</strong>
-          <p>com histórico no sistema</p>
+          <span>Radar de retorno</span>
+          <strong>{radar.all.length}</strong>
+          <p>clientes para acompanhar</p>
         </div>
         <div className="metric-card">
-          <span>Oportunidades</span>
-          <strong>{radar.all.length + lostCustomers.length + emptySlots.length}</strong>
-          <p>ações identificadas</p>
+          <span>Sem próximo</span>
+          <strong>{radar.noNext.length}</strong>
+          <p>oportunidades de follow-up</p>
         </div>
       </div>
-
-      <section className="dashboard-section intelligence-revenue">
-        <div className="section-heading">
-          <div>
-            <div className="eyebrow">Financeiro</div>
-            <h2>Previsão de faturamento</h2>
-          </div>
-          <span>Valores baseados na agenda confirmada</span>
-        </div>
-        <div className="intelligence-revenue-grid">
-          <div><span>Agendado</span><strong>{formatCurrency(revenue.confirmed)}</strong><small>futuro confirmado</small></div>
-          <div><span>Próximos 7 dias</span><strong>{formatCurrency(revenue.next7)}</strong><small>já reservado</small></div>
-          <div><span>Próximos 30 dias</span><strong>{formatCurrency(revenue.next30)}</strong><small>já reservado</small></div>
-          <div><span>Oportunidade</span><strong>{formatCurrency(revenue.returnOpportunity)}</strong><small>estimativa de retorno</small></div>
-        </div>
-      </section>
 
       <section className="dashboard-section return-radar-section">
         <div className="section-heading">
@@ -1660,18 +1314,31 @@ function Overview({
         </div>
 
         <div className="return-radar-summary">
-          <div className="return-radar-stat overdue"><span>🔴</span><strong>{radar.overdue.length}</strong><small>Atrasadas</small></div>
-          <div className="return-radar-stat upcoming"><span>🟡</span><strong>{radar.upcoming.length}</strong><small>Próximas</small></div>
-          <div className="return-radar-stat no-next"><span>⚪</span><strong>{radar.noNext.length}</strong><small>Sem próximo</small></div>
+          <div className="return-radar-stat overdue">
+            <strong>{radar.overdue.length}</strong>
+            <small>Atrasadas</small>
+          </div>
+          <div className="return-radar-stat upcoming">
+            <strong>{radar.upcoming.length}</strong>
+            <small>Próximas</small>
+          </div>
+          <button
+            type="button"
+            className={`return-radar-stat no-next ${showNoNext ? 'selected' : ''}`}
+            onClick={() => setShowNoNext((value) => !value)}
+          >
+            <strong>{radar.noNext.length}</strong>
+            <small>Sem próximo agendamento</small>
+          </button>
         </div>
 
         {radar.all.length ? (
           <div className="return-radar-groups">
-            {radarGroups.map((group) =>
+            {groups.map((group) =>
               group.items.length ? (
                 <div className={group.className} key={group.key}>
                   <div className="return-radar-group-heading">
-                    <div><span>{group.eyebrow}</span><h3>{group.icon} {group.title}</h3></div>
+                    <div><span>{group.eyebrow}</span><h3>{group.title}</h3></div>
                     <strong>{group.items.length}</strong>
                   </div>
                   <div className="return-radar-list">
@@ -1691,9 +1358,36 @@ function Overview({
                       </div>
                     ))}
                   </div>
-                  {group.items.length > 5 && <span className="return-radar-more">+ {group.items.length - 5} outras oportunidades</span>}
                 </div>
               ) : null,
+            )}
+
+            {showNoNext && (
+              <div className="radar-group no-next expanded">
+                <div className="return-radar-group-heading">
+                  <div><span>Oportunidades</span><h3>Clientes sem próximo agendamento</h3></div>
+                  <strong>{radar.noNext.length}</strong>
+                </div>
+                {radar.noNext.length ? (
+                  <div className="return-radar-list">
+                    {radar.noNext.map((item) => (
+                      <div className="return-radar-card" key={`${item.customerWhatsapp || item.customerName}-${item.lastAppointmentAt}-no-next`}>
+                        <div className="return-radar-main">
+                          <strong>{item.customerName}</strong>
+                          <span>{item.serviceName}</span>
+                          <small>Último atendimento: {brazilShortDate(item.lastAppointmentAt)} · Retorno habitual: {item.habitualDays} dias</small>
+                          <b>Boa oportunidade para follow-up</b>
+                        </div>
+                        {item.customerWhatsapp.trim() ? (
+                          <button type="button" className="return-radar-message" onClick={() => openReturnMessage(item)}>
+                            <MessageCircle size={15} /> WhatsApp
+                          </button>
+                        ) : <span className="return-radar-no-whatsapp">WhatsApp não cadastrado</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : <div className="intelligence-empty">Nenhuma cliente está sem próximo agendamento.</div>}
+              </div>
             )}
           </div>
         ) : (
@@ -1701,75 +1395,6 @@ function Overview({
             <div className="empty-icon"><Check size={19} /></div>
             <div><strong>Por enquanto, nenhuma cliente precisa de retorno.</strong><p>Quando houver uma oportunidade, ela aparecerá aqui automaticamente.</p></div>
           </div>
-        )}
-      </section>
-
-      <div className="intelligence-two-column">
-        <section className="dashboard-section intelligence-list-section">
-          <div className="section-heading">
-            <div><div className="eyebrow">Retenção</div><h2>Clientes sumidas</h2></div>
-            <span>{lostCustomers.length}</span>
-          </div>
-          {lostCustomers.length ? (
-            <div className="intelligence-customer-list">
-              {lostCustomers.slice(0, 5).map((customer) => (
-                <button type="button" className="intelligence-customer" key={customer.key} onClick={() => setSelectedCustomer(customer)}>
-                  <div>
-                    <strong>{customer.name}</strong>
-                    <span>{customer.lastService} · último atendimento {brazilShortDate(customer.lastAppointmentAt)}</span>
-                    <small>{formatDays(customer.daysSinceLast)} sem voltar · habitual: {formatInterval(customer.averageInterval)}</small>
-                  </div>
-                  <ArrowRight size={16} />
-                </button>
-              ))}
-            </div>
-          ) : <div className="intelligence-empty">Nenhuma cliente está fora do período habitual de retorno.</div>}
-        </section>
-
-        <section className="dashboard-section intelligence-list-section">
-          <div className="section-heading">
-            <div><div className="eyebrow">Prevenção</div><h2>Clientes em risco</h2></div>
-            <span>{atRiskCustomers.length}</span>
-          </div>
-          {atRiskCustomers.length ? (
-            <div className="intelligence-customer-list">
-              {atRiskCustomers.slice(0, 5).map((customer) => (
-                <button type="button" className="intelligence-customer" key={customer.key} onClick={() => setSelectedCustomer(customer)}>
-                  <div>
-                    <strong>{customer.name}</strong>
-                    <span>{customer.lastService} · ticket médio {formatCurrency(customer.averageTicket)}</span>
-                    <small>{formatDays(customer.daysSinceLast)} desde o último · habitual: {formatInterval(customer.averageInterval)}</small>
-                  </div>
-                  <ArrowRight size={16} />
-                </button>
-              ))}
-            </div>
-          ) : <div className="intelligence-empty">Nenhuma cliente está atualmente em risco.</div>}
-        </section>
-      </div>
-
-      <section className="dashboard-section intelligence-empty-slots">
-        <div className="section-heading">
-          <div><div className="eyebrow">Ocupação</div><h2>Radar de agenda vazia</h2></div>
-          <span>{emptySlots.length} oportunidades</span>
-        </div>
-        {emptySlots.length ? (
-          <div className="empty-slot-list">
-            {emptySlots.map((item) => (
-              <div className="empty-slot-card" key={`${item.startsAt}-${item.customer.key}`}>
-                <div>
-                  <strong>{brazilShortDate(item.startsAt)} · {brazilTime(item.startsAt)}</strong>
-                  <span>Sugerir para {item.customer.name}</span>
-                  <small>{item.reason}</small>
-                </div>
-                <button type="button" className="return-radar-message" onClick={() => openCustomerWhatsApp(item.customer)}>
-                  <MessageCircle size={15} /> Chamar
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="intelligence-empty">Nenhum horário livre próximo com uma sugestão clara de cliente.</div>
         )}
       </section>
 
@@ -1786,50 +1411,6 @@ function Overview({
         <a href="/dashboard/horarios"><Clock3 size={18} /><strong>Configurar horários</strong><span>Defina quando atende</span></a>
         <a href={`/agendar/${data.profile.slug}`} target="_blank" rel="noreferrer"><ExternalLink size={18} /><strong>Ver meu perfil</strong><span>Veja como suas clientes veem</span></a>
       </section>
-
-      {selectedCustomer && (
-        <div className="return-message-overlay" role="dialog" aria-modal="true">
-          <div className="customer-profile-modal">
-            <div className="return-message-top">
-              <div><span className="eyebrow">Perfil 360º</span><h2>{selectedCustomer.name}</h2></div>
-              <button type="button" className="icon-button" onClick={() => setSelectedCustomer(null)} aria-label="Fechar"><X size={18} /></button>
-            </div>
-
-            <div className="customer-profile-status">{customerStatusLabel(selectedCustomer.status)}</div>
-
-            <div className="customer-profile-grid">
-              <div><span>WhatsApp</span><strong>{selectedCustomer.whatsapp || 'Não cadastrado'}</strong></div>
-              <div><span>Atendimentos</span><strong>{selectedCustomer.totalAppointments}</strong></div>
-              <div><span>Último serviço</span><strong>{selectedCustomer.lastService}</strong></div>
-              <div><span>Último valor</span><strong>{formatCurrency(selectedCustomer.lastPrice)}</strong></div>
-              <div><span>Ticket médio</span><strong>{formatCurrency(selectedCustomer.averageTicket)}</strong></div>
-              <div><span>Retorno habitual</span><strong>{formatInterval(selectedCustomer.averageInterval)}</strong></div>
-              <div><span>Sem agendar</span><strong>{formatDays(selectedCustomer.daysSinceLast)}</strong></div>
-              <div><span>Último atendimento</span><strong>{brazilShortDate(selectedCustomer.lastAppointmentAt)}</strong></div>
-            </div>
-
-            <div className="customer-history">
-              <span className="eyebrow">Histórico recente</span>
-              {selectedCustomer.appointments.slice(-5).reverse().map((appointment: PaymentAppointment) => (
-                <div key={appointment.id}>
-                  <span>{brazilShortDate(appointment.starts_at)}</span>
-                  <strong>{appointment.service?.name || 'Serviço'}</strong>
-                  <b>{formatCurrency(Number(appointment.price || 0))}</b>
-                </div>
-              ))}
-            </div>
-
-            <div className="return-message-actions">
-              <button type="button" className="button button-soft" onClick={() => setSelectedCustomer(null)}>Fechar</button>
-              {selectedCustomer.whatsapp && (
-                <button type="button" className="button button-primary" onClick={() => openCustomerWhatsApp(selectedCustomer)}>
-                  <MessageCircle size={17} /> Chamar no WhatsApp
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {selectedReturn && (
         <div className="return-message-overlay" role="dialog" aria-modal="true" aria-labelledby="return-message-title">
@@ -1853,6 +1434,290 @@ function Overview({
       )}
     </>
   );
+}
+
+function IntelligencePage({
+  data,
+  mode,
+}: {
+  data: NonNullable<OwnerData>;
+  mode: 'lost' | 'risk' | 'empty' | 'profile' | 'today' | 'revenue';
+}) {
+  type Customer = {
+    key: string;
+    name: string;
+    whatsapp: string;
+    totalAppointments: number;
+    lastAppointmentAt: string;
+    lastService: string;
+    lastPrice: number;
+    averageTicket: number;
+    averageInterval: number | null;
+    daysSinceLast: number;
+    status: 'nova' | 'recorrente' | 'risco' | 'sumida';
+    appointments: PaymentAppointment[];
+  };
+
+  const confirmedAppointments = useMemo(
+    () => data.appointments.filter((item) => item.status === 'confirmed'),
+    [data.appointments],
+  );
+
+  const customerProfiles = useMemo<Customer[]>(() => {
+    const groups = new Map<string, PaymentAppointment[]>();
+    const normalize = (value: string) =>
+      value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const keyFor = (item: PaymentAppointment) =>
+      item.customer_whatsapp?.replace(/\D/g, '') || normalize(item.customer_name);
+
+    confirmedAppointments
+      .filter((item) => new Date(item.starts_at) <= new Date())
+      .forEach((item) => {
+        const key = keyFor(item);
+        const current = groups.get(key) || [];
+        groups.set(key, [...current, item]);
+      });
+
+    const now = new Date();
+    return Array.from(groups.entries()).map(([key, items]) => {
+      const sorted = [...items].sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+      const last = sorted[sorted.length - 1];
+      const intervals: number[] = [];
+      for (let i = 1; i < sorted.length; i += 1) {
+        const diff = (new Date(sorted[i].starts_at).getTime() - new Date(sorted[i - 1].starts_at).getTime()) / 86400000;
+        if (diff >= 7 && diff <= 180) intervals.push(diff);
+      }
+      const averageInterval = intervals.length ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length : null;
+      const daysSinceLast = Math.max(0, Math.floor((now.getTime() - new Date(last.starts_at).getTime()) / 86400000));
+      let status: Customer['status'] = sorted.length === 1 ? 'nova' : 'recorrente';
+      if (sorted.length >= 2 && averageInterval !== null) {
+        if (daysSinceLast > averageInterval + 14) status = 'sumida';
+        else if (daysSinceLast > averageInterval) status = 'risco';
+      }
+      return {
+        key,
+        name: last.customer_name || 'Cliente',
+        whatsapp: last.customer_whatsapp || '',
+        totalAppointments: sorted.length,
+        lastAppointmentAt: last.starts_at,
+        lastService: last.service?.name || 'Serviço',
+        lastPrice: Number(last.price || 0),
+        averageTicket: sorted.reduce((sum, item) => sum + Number(item.price || 0), 0) / sorted.length,
+        averageInterval,
+        daysSinceLast,
+        status,
+        appointments: sorted,
+      };
+    });
+  }, [confirmedAppointments]);
+
+  const lostCustomers = customerProfiles.filter((item) => item.status === 'sumida').sort((a, b) => b.daysSinceLast - a.daysSinceLast);
+  const atRiskCustomers = customerProfiles.filter((item) => item.status === 'risco').sort((a, b) => b.daysSinceLast - a.daysSinceLast);
+
+  const radar = useMemo(
+    () => buildReturnRadar(data.appointments as PaymentAppointment[], data.services),
+    [data.appointments, data.services],
+  );
+
+  const revenue = useMemo(() => {
+    const now = new Date();
+    const in7 = new Date(now);
+    in7.setDate(in7.getDate() + 7);
+    const in30 = new Date(now);
+    in30.setDate(in30.getDate() + 30);
+    const future = confirmedAppointments.filter((item) => new Date(item.starts_at) >= now);
+    const sum = (items: PaymentAppointment[]) => items.reduce((total, item) => total + Number(item.price || 0), 0);
+    const next7 = future.filter((item) => new Date(item.starts_at) <= in7);
+    const next30 = future.filter((item) => new Date(item.starts_at) <= in30);
+    const returnOpportunity = customerProfiles
+      .filter((item) => item.status === 'sumida' || item.status === 'risco')
+      .reduce((total, item) => total + Number(item.averageTicket || 0), 0);
+    return { confirmed: sum(future), next7: sum(next7), next30: sum(next30), returnOpportunity };
+  }, [confirmedAppointments, customerProfiles]);
+
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  function openCustomerWhatsApp(customer: Customer) {
+    if (!customer.whatsapp.trim()) return;
+    const message = customer.status === 'sumida'
+      ? `Oi, ${customer.name}! Tudo bem? Vi aqui que já faz um tempinho desde seu último atendimento de ${customer.lastService}. Queria saber se você gostaria de agendar novamente.`
+      : `Oi, ${customer.name}! Tudo bem? Seu próximo atendimento costuma acontecer por volta de agora. Se quiser, posso te passar os horários disponíveis.`;
+    const url = whatsappUrl(customer.whatsapp, message);
+    if (url !== '#') window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function statusLabel(status: Customer['status']) {
+    if (status === 'nova') return 'Nova cliente';
+    if (status === 'recorrente') return 'Recorrente';
+    if (status === 'risco') return 'Em risco';
+    return 'Cliente sumido';
+  }
+
+  const titleMap = {
+    lost: ['Retenção', 'Clientes sumidos', 'Clientes que estão há mais tempo sem voltar.'],
+    risk: ['Prevenção', 'Clientes em risco', 'Clientes se aproximando do intervalo em que costumam retornar.'],
+    empty: ['Ocupação', 'Radar de agenda vazia', 'Encontre oportunidades para preencher horários livres.'],
+    profile: ['Relacionamento', 'Perfil 360º', 'Veja o histórico e o valor de cada cliente em um só lugar.'],
+    today: ['Inteligência', 'O que fazer hoje?', 'Priorize as ações que podem gerar resultado hoje.'],
+    revenue: ['Financeiro', 'Previsão de faturamento', 'Acompanhe o que já está reservado e o potencial de retorno.'],
+  } as const;
+
+  const [eyebrow, title, description] = titleMap[mode];
+
+  const actions = useMemo(() => {
+    const result: Array<{ title: string; text: string; customer?: Customer; href?: string; action: string }> = [];
+    if (radar.overdue.length) result.push({ title: `${radar.overdue.length} retorno${radar.overdue.length > 1 ? 's' : ''} atrasado${radar.overdue.length > 1 ? 's' : ''}`, text: 'Faça o follow-up enquanto a cliente ainda está próxima do período habitual.', action: 'Ver radar', href: '/dashboard' });
+    if (lostCustomers.length) result.push({ title: `${lostCustomers.length} cliente${lostCustomers.length > 1 ? 's' : ''} sumido${lostCustomers.length > 1 ? 's' : ''}`, text: 'Retome o contato com quem já conhece seu trabalho.', action: 'Ver clientes', href: '/dashboard/clientes-sumidos' });
+    if (atRiskCustomers.length) result.push({ title: `${atRiskCustomers.length} cliente${atRiskCustomers.length > 1 ? 's' : ''} em risco`, text: 'Antecipe o contato antes de perder o ritmo de retorno.', action: 'Ver clientes', href: '/dashboard/clientes-em-risco' });
+    if (radar.noNext.length) result.push({ title: `${radar.noNext.length} cliente${radar.noNext.length > 1 ? 's' : ''} sem próximo agendamento`, text: 'São oportunidades diretas para preencher a agenda futura.', action: 'Ver oportunidades', href: '/dashboard' });
+    return result.slice(0, 6);
+  }, [radar, lostCustomers, atRiskCustomers]);
+
+  const emptySlots = useMemo(() => {
+    const results: Array<{ startsAt: string; customer: Customer; reason: string }> = [];
+    const now = new Date();
+    for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
+      const date = new Date();
+      date.setHours(12, 0, 0, 0);
+      date.setDate(date.getDate() + dayOffset);
+      const dayOfWeek = date.getDay();
+      const hour = data.hours.find((item) => item.day_of_week === dayOfWeek && item.is_open);
+      if (!hour?.start_time || !hour?.end_time) continue;
+      const available = data.availability.filter((slot) => slot.day_of_week === dayOfWeek && slot.active && slot.start_time);
+      for (const slot of available) {
+        const startsAt = `${dateKey(date)}T${slot.start_time}`;
+        const startsDate = new Date(`${startsAt}-03:00`);
+        if (startsDate <= now) continue;
+        const occupied = confirmedAppointments.some((appointment) => {
+          const start = new Date(appointment.starts_at).getTime();
+          const end = new Date(appointment.ends_at).getTime();
+          const target = startsDate.getTime();
+          return target >= start && target < end;
+        });
+        if (occupied) continue;
+        const candidate = lostCustomers[0] || atRiskCustomers[0] || customerProfiles.find((item) => item.status === 'recorrente');
+        if (!candidate) continue;
+        results.push({ startsAt: startsDate.toISOString(), customer: candidate, reason: candidate.status === 'sumida' ? 'Cliente sumido que pode voltar.' : candidate.status === 'risco' ? 'Cliente próxima do período habitual.' : 'Cliente recorrente para reativação.' });
+        if (results.length >= 12) return results;
+      }
+    }
+    return results;
+  }, [data.hours, data.availability, confirmedAppointments, lostCustomers, atRiskCustomers, customerProfiles]);
+
+  return (
+    <>
+      <div className="page-title">
+        <div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>
+        <a className="button button-primary" href="/dashboard">Voltar ao painel</a>
+      </div>
+
+      {mode === 'lost' && <CustomerListPage customers={lostCustomers} emptyText="Nenhum cliente sumido no momento." onSelect={setSelectedCustomer} onWhatsApp={openCustomerWhatsApp} />}
+      {mode === 'risk' && <CustomerListPage customers={atRiskCustomers} emptyText="Nenhum cliente em risco no momento." onSelect={setSelectedCustomer} onWhatsApp={openCustomerWhatsApp} />}
+      {mode === 'profile' && <CustomerListPage customers={customerProfiles} emptyText="Ainda não há histórico suficiente para criar perfis." onSelect={setSelectedCustomer} onWhatsApp={openCustomerWhatsApp} />}
+
+      {mode === 'today' && (
+        <section className="dashboard-section intelligence-today">
+          <div className="section-heading"><div><div className="eyebrow">Prioridades</div><h2>Ações recomendadas</h2></div><span>{actions.length} ações</span></div>
+          <div className="intelligence-actions">
+            {actions.length ? actions.map((item) => <div className="intelligence-action" key={item.title}><div><strong>{item.title}</strong><p>{item.text}</p></div><a className="small-action intelligence-action-link" href={item.href || '/dashboard'}>{item.action}</a></div>) : <div className="intelligence-empty">Sua agenda está sob controle. Nenhuma ação prioritária foi identificada.</div>}
+          </div>
+        </section>
+      )}
+
+      {mode === 'revenue' && (
+        <section className="dashboard-section intelligence-revenue">
+          <div className="intelligence-revenue-grid">
+            <div><span>Agendado</span><strong>{formatCurrency(revenue.confirmed)}</strong><small>futuro confirmado</small></div>
+            <div><span>Próximos 7 dias</span><strong>{formatCurrency(revenue.next7)}</strong><small>já reservado</small></div>
+            <div><span>Próximos 30 dias</span><strong>{formatCurrency(revenue.next30)}</strong><small>já reservado</small></div>
+            <div><span>Oportunidade</span><strong>{formatCurrency(revenue.returnOpportunity)}</strong><small>potencial de retorno</small></div>
+          </div>
+        </section>
+      )}
+
+      {mode === 'empty' && (
+        <section className="dashboard-section intelligence-empty-slots">
+          <div className="section-heading"><div><div className="eyebrow">Ocupação</div><h2>Horários com oportunidade</h2></div><span>{emptySlots.length} oportunidades</span></div>
+          {emptySlots.length ? <div className="empty-slot-list">{emptySlots.map((item) => <div className="empty-slot-card" key={`${item.startsAt}-${item.customer.key}`}><div><strong>{brazilShortDate(item.startsAt)} · {brazilTime(item.startsAt)}</strong><span>Sugerir para {item.customer.name}</span><small>{item.reason}</small></div><button type="button" className="return-radar-message" onClick={() => openCustomerWhatsApp(item.customer)}><MessageCircle size={15} /> Chamar</button></div>)}</div> : <div className="intelligence-empty">Nenhum horário livre próximo com uma sugestão clara de cliente.</div>}
+        </section>
+      )}
+
+      {selectedCustomer && (
+        <div className="return-message-overlay" role="dialog" aria-modal="true">
+          <div className="customer-profile-modal">
+            <div className="return-message-top"><div><span className="eyebrow">Perfil 360º</span><h2>{selectedCustomer.name}</h2></div><button type="button" className="icon-button" onClick={() => setSelectedCustomer(null)} aria-label="Fechar"><X size={18} /></button></div>
+            <div className="customer-profile-status">{statusLabel(selectedCustomer.status)}</div>
+            <div className="customer-profile-grid">
+              <div><span>WhatsApp</span><strong>{selectedCustomer.whatsapp || 'Não cadastrado'}</strong></div>
+              <div><span>Atendimentos</span><strong>{selectedCustomer.totalAppointments}</strong></div>
+              <div><span>Último serviço</span><strong>{selectedCustomer.lastService}</strong></div>
+              <div><span>Último valor</span><strong>{formatCurrency(selectedCustomer.lastPrice)}</strong></div>
+              <div><span>Ticket médio</span><strong>{formatCurrency(selectedCustomer.averageTicket)}</strong></div>
+              <div><span>Retorno habitual</span><strong>{selectedCustomer.averageInterval === null ? 'Ainda sem padrão' : `${Math.round(selectedCustomer.averageInterval)} dias`}</strong></div>
+              <div><span>Sem agendar</span><strong>{selectedCustomer.daysSinceLast} dias</strong></div>
+              <div><span>Último atendimento</span><strong>{brazilShortDate(selectedCustomer.lastAppointmentAt)}</strong></div>
+            </div>
+            <div className="customer-history"><span className="eyebrow">Histórico recente</span>{selectedCustomer.appointments.slice(-5).reverse().map((appointment) => <div key={appointment.id}><span>{brazilShortDate(appointment.starts_at)}</span><strong>{appointment.service?.name || 'Serviço'}</strong><b>{formatCurrency(Number(appointment.price || 0))}</b></div>)}</div>
+            <div className="return-message-actions"><button type="button" className="button button-soft" onClick={() => setSelectedCustomer(null)}>Fechar</button>{selectedCustomer.whatsapp && <button type="button" className="button button-primary" onClick={() => openCustomerWhatsApp(selectedCustomer)}><MessageCircle size={17} /> Chamar no WhatsApp</button>}</div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function CustomerListPage({
+  customers,
+  emptyText,
+  onSelect,
+  onWhatsApp,
+}: {
+  customers: Array<{
+    key: string;
+    name: string;
+    whatsapp: string;
+    totalAppointments: number;
+    lastAppointmentAt: string;
+    lastService: string;
+    lastPrice: number;
+    averageTicket: number;
+    averageInterval: number | null;
+    daysSinceLast: number;
+    status: 'nova' | 'recorrente' | 'risco' | 'sumida';
+    appointments: PaymentAppointment[];
+  }>;
+  emptyText: string;
+  onSelect: (customer: {
+    key: string;
+    name: string;
+    whatsapp: string;
+    totalAppointments: number;
+    lastAppointmentAt: string;
+    lastService: string;
+    lastPrice: number;
+    averageTicket: number;
+    averageInterval: number | null;
+    daysSinceLast: number;
+    status: 'nova' | 'recorrente' | 'risco' | 'sumida';
+    appointments: PaymentAppointment[];
+  }) => void;
+  onWhatsApp: (customer: {
+    key: string;
+    name: string;
+    whatsapp: string;
+    totalAppointments: number;
+    lastAppointmentAt: string;
+    lastService: string;
+    lastPrice: number;
+    averageTicket: number;
+    averageInterval: number | null;
+    daysSinceLast: number;
+    status: 'nova' | 'recorrente' | 'risco' | 'sumida';
+    appointments: PaymentAppointment[];
+  }) => void;
+}) {
+  if (!customers.length) return <section className="dashboard-section"><div className="intelligence-empty">{emptyText}</div></section>;
+  return <section className="dashboard-section intelligence-list-section"><div className="intelligence-customer-list">{customers.map((customer) => <div className="intelligence-customer" key={customer.key}><button type="button" className="intelligence-customer-main" onClick={() => onSelect(customer)}><div><strong>{customer.name}</strong><span>{customer.lastService} · último atendimento {brazilShortDate(customer.lastAppointmentAt)}</span><small>{customer.daysSinceLast} dias desde o último · ticket médio {formatCurrency(customer.averageTicket)}</small></div><ArrowRight size={16} /></button>{customer.whatsapp && <button type="button" className="return-radar-message" onClick={() => onWhatsApp(customer)}><MessageCircle size={15} /> WhatsApp</button>}</div>)}</div></section>;
 }
 
 function AppointmentCard({
@@ -3938,6 +3803,12 @@ function DesignSystem() {
         .customer-profile-modal { max-height:calc(100vh - 20px); padding:15px; }
         .customer-profile-grid { grid-template-columns:1fr 1fr; }
       }
+      .return-radar-stat { border:0; cursor:pointer; text-align:left; font:inherit; }
+      .return-radar-stat.selected { outline:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.08); }
+      .intelligence-customer { display:flex; align-items:center; gap:12px; }
+      .intelligence-customer-main { flex:1; display:flex; align-items:center; gap:12px; border:0; background:none; color:inherit; text-align:left; cursor:pointer; padding:0; font:inherit; }
+      .intelligence-customer > .return-radar-message { flex:0 0 auto; }
+      .radar-group.no-next.expanded { margin-top:14px; }
     `}</style>
   );
 }
