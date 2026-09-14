@@ -39,6 +39,11 @@ import type {
   Service,
 } from '@/types';
 import {
+  buildReturnRadar,
+  generateReturnMessage,
+  type ReturnRadarItem,
+} from '@/utils/returnRadar';
+import {
   dateKey,
   formatCurrency,
   formatDate,
@@ -1181,18 +1186,391 @@ function Overview({
   data: NonNullable<OwnerData>;
 }) {
   const today = dateKey(new Date());
+  const [selectedReturn, setSelectedReturn] = useState<ReturnRadarItem | null>(null);
+  const [returnMessage, setReturnMessage] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
 
-  const todays = data.appointments.filter(
-    (item) =>
-      brazilDateKey(item.starts_at) === today &&
-      item.status === 'confirmed',
+  const confirmedAppointments = useMemo(
+    () => data.appointments.filter((item) => item.status === 'confirmed'),
+    [data.appointments],
   );
 
-  const next = data.appointments.find(
-    (item) =>
-      item.status === 'confirmed' &&
-      new Date(item.starts_at) >= new Date(),
+  const todays = confirmedAppointments.filter(
+    (item) => brazilDateKey(item.starts_at) === today,
   );
+
+  const next = confirmedAppointments.find(
+    (item) => new Date(item.starts_at) >= new Date(),
+  );
+
+  const radar = useMemo(
+    () => buildReturnRadar(data.appointments as PaymentAppointment[], data.services),
+    [data.appointments, data.services],
+  );
+
+  const customerProfiles = useMemo(() => {
+    type Customer = {
+      key: string;
+      name: string;
+      whatsapp: string;
+      totalAppointments: number;
+      lastAppointmentAt: string;
+      lastService: string;
+      lastPrice: number;
+      averageTicket: number;
+      averageInterval: number | null;
+      daysSinceLast: number;
+      status: 'nova' | 'recorrente' | 'risco' | 'sumida';
+      appointments: PaymentAppointment[];
+    };
+
+    const groups = new Map<string, PaymentAppointment[]>();
+    const normalize = (value: string) =>
+      value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const keyFor = (item: PaymentAppointment) =>
+      item.customer_whatsapp?.replace(/\D/g, '') || normalize(item.customer_name);
+
+    confirmedAppointments
+      .filter((item) => new Date(item.starts_at) <= new Date())
+      .forEach((item) => {
+        const key = keyFor(item);
+        const current = groups.get(key) || [];
+        groups.set(key, [...current, item]);
+      });
+
+    const now = new Date();
+
+    return Array.from(groups.entries()).map(([key, items]) => {
+      const sorted = [...items].sort(
+        (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
+      );
+      const last = sorted[sorted.length - 1];
+      const intervals: number[] = [];
+
+      for (let i = 1; i < sorted.length; i += 1) {
+        const diff =
+          (new Date(sorted[i].starts_at).getTime() -
+            new Date(sorted[i - 1].starts_at).getTime()) /
+          86400000;
+        if (diff >= 7 && diff <= 180) intervals.push(diff);
+      }
+
+      const averageInterval = intervals.length
+        ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length
+        : null;
+
+      const daysSinceLast = Math.max(
+        0,
+        Math.floor(
+          (now.getTime() - new Date(last.starts_at).getTime()) / 86400000,
+        ),
+      );
+
+      let status: Customer['status'] = sorted.length === 1 ? 'nova' : 'recorrente';
+
+      if (sorted.length >= 2 && averageInterval !== null) {
+        if (daysSinceLast > averageInterval + 14) status = 'sumida';
+        else if (daysSinceLast > averageInterval) status = 'risco';
+      }
+
+      return {
+        key,
+        name: last.customer_name || 'Cliente',
+        whatsapp: last.customer_whatsapp || '',
+        totalAppointments: sorted.length,
+        lastAppointmentAt: last.starts_at,
+        lastService: last.service?.name || 'Serviço',
+        lastPrice: Number(last.price || 0),
+        averageTicket:
+          sorted.reduce((sum, item) => sum + Number(item.price || 0), 0) /
+          sorted.length,
+        averageInterval,
+        daysSinceLast,
+        status,
+        appointments: sorted,
+      };
+    });
+  }, [confirmedAppointments]);
+
+  const lostCustomers = useMemo(
+    () =>
+      customerProfiles
+        .filter((item) => item.status === 'sumida')
+        .sort((a, b) => b.daysSinceLast - a.daysSinceLast),
+    [customerProfiles],
+  );
+
+  const atRiskCustomers = useMemo(
+    () =>
+      customerProfiles
+        .filter((item) => item.status === 'risco')
+        .sort((a, b) => b.daysSinceLast - a.daysSinceLast),
+    [customerProfiles],
+  );
+
+  const revenue = useMemo(() => {
+    const now = new Date();
+    const in7 = new Date(now);
+    in7.setDate(in7.getDate() + 7);
+    const in30 = new Date(now);
+    in30.setDate(in30.getDate() + 30);
+
+    const future = confirmedAppointments.filter(
+      (item) => new Date(item.starts_at) >= now,
+    );
+
+    const sum = (items: PaymentAppointment[]) =>
+      items.reduce((total, item) => total + Number(item.price || 0), 0);
+
+    const next7 = future.filter((item) => new Date(item.starts_at) <= in7);
+    const next30 = future.filter((item) => new Date(item.starts_at) <= in30);
+
+    const returnOpportunity = customerProfiles
+  .filter((item) => item.status === 'sumida' || item.status === 'risco')
+  .reduce((total, item) => total + Number(item.averageTicket || 0), 0);
+    return {
+      confirmed: sum(future),
+      next7: sum(next7),
+      next30: sum(next30),
+      returnOpportunity,
+    };
+  }, [confirmedAppointments, radar, customerProfiles]);
+
+  const emptySlots = useMemo(() => {
+    const results: Array<{
+      startsAt: string;
+      customer: any;
+      reason: string;
+    }> = [];
+
+    const now = new Date();
+
+    for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
+      const date = new Date();
+      date.setHours(12, 0, 0, 0);
+      date.setDate(date.getDate() + dayOffset);
+
+      const dayOfWeek = date.getDay();
+      const hour = data.hours.find(
+        (item) => item.day_of_week === dayOfWeek && item.is_open,
+      );
+
+      if (!hour?.start_time || !hour?.end_time) continue;
+
+      const available = data.availability
+        .filter(
+          (slot) =>
+            slot.day_of_week === dayOfWeek &&
+            slot.active &&
+            slot.start_time,
+        )
+        .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+      for (const slot of available) {
+        const startsAt = new Date(
+          `${brazilDateKey(date)}T${slot.start_time.slice(0, 5)}:00-03:00`,
+        );
+
+        if (startsAt <= now) continue;
+
+        const occupied = confirmedAppointments.some((appointment) => {
+          const appointmentStart = new Date(appointment.starts_at);
+          const appointmentEnd = new Date(
+            appointment.ends_at || appointment.starts_at,
+          );
+          return appointmentStart < new Date(startsAt.getTime() + 30 * 60000) &&
+            appointmentEnd > startsAt;
+        });
+
+        const blocked = data.blocks.some((block) => {
+          const blockStart = new Date(block.starts_at);
+          const blockEnd = new Date(block.ends_at);
+          return blockStart < new Date(startsAt.getTime() + 30 * 60000) &&
+            blockEnd > startsAt;
+        });
+
+        if (occupied || blocked) continue;
+
+        const customer = [...customerProfiles]
+          .filter(
+            (item) =>
+              item.whatsapp &&
+              item.totalAppointments >= 2 &&
+              item.averageInterval !== null &&
+              item.daysSinceLast >= Math.max(0, item.averageInterval - 5),
+          )
+          .sort((a, b) => {
+            const aDistance = Math.abs(
+              (a.averageInterval || 0) - a.daysSinceLast,
+            );
+            const bDistance = Math.abs(
+              (b.averageInterval || 0) - b.daysSinceLast,
+            );
+            return aDistance - bDistance;
+          })[0];
+
+        if (customer) {
+          results.push({
+            startsAt: startsAt.toISOString(),
+            customer,
+            reason:
+              customer.daysSinceLast > (customer.averageInterval || 0)
+                ? 'Cliente já passou do intervalo habitual de retorno.'
+                : 'Retorno habitual desta cliente está próximo.',
+          });
+        }
+      }
+    }
+
+    return results.slice(0, 5);
+  }, [data.availability, data.blocks, data.hours, confirmedAppointments, customerProfiles]);
+
+  const actions = useMemo(() => {
+    const result: Array<{
+      title: string;
+      text: string;
+      action: string;
+      customer?: any;
+      href?: string;
+    }> = [];
+
+    if (radar.overdue.length) {
+      result.push({
+        title: `${radar.overdue.length} cliente${radar.overdue.length > 1 ? 's' : ''} atrasada${radar.overdue.length > 1 ? 's' : ''}`,
+        text: 'Há clientes que já passaram do período habitual de retorno.',
+        action: 'Ver clientes',
+      });
+    }
+
+    if (emptySlots.length) {
+      result.push({
+        title: `${emptySlots.length} horário${emptySlots.length > 1 ? 's' : ''} livre${emptySlots.length > 1 ? 's' : ''}`,
+        text: 'Você pode tentar preencher esses horários antes que fiquem ociosos.',
+        action: 'Ver oportunidades',
+      });
+    }
+
+    if (lostCustomers.length) {
+      result.push({
+        title: `${lostCustomers.length} cliente${lostCustomers.length > 1 ? 's' : ''} sumida${lostCustomers.length > 1 ? 's' : ''}`,
+        text: 'Vale retomar o contato enquanto a cliente ainda conhece seu trabalho.',
+        action: 'Chamar clientes',
+      });
+    }
+
+    if (atRiskCustomers.length) {
+      result.push({
+        title: `${atRiskCustomers.length} cliente${atRiskCustomers.length > 1 ? 's' : ''} em risco`,
+        text: 'Algumas clientes estão chegando ou já passaram do intervalo habitual.',
+        action: 'Ver clientes',
+      });
+    }
+
+    if (!result.length) {
+      result.push({
+        title: 'Agenda sob controle',
+        text: 'Não há nenhuma ação urgente identificada agora.',
+        action: 'Ver agenda',
+        href: '/dashboard/agendamentos',
+      });
+    }
+
+    return result.slice(0, 4);
+  }, [radar, emptySlots, lostCustomers, atRiskCustomers]);
+
+  function openReturnMessage(item: ReturnRadarItem) {
+    setSelectedReturn(item);
+    setReturnMessage(generateReturnMessage(item));
+  }
+
+  function closeReturnMessage() {
+    setSelectedReturn(null);
+    setReturnMessage('');
+  }
+
+  function openWhatsApp() {
+    if (!selectedReturn || !selectedReturn.customerWhatsapp.trim()) return;
+    const url = whatsappUrl(selectedReturn.customerWhatsapp, returnMessage);
+    if (url === '#') return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function openCustomerWhatsApp(customer: any) {
+    if (!customer?.whatsapp?.trim()) return;
+
+    const message =
+      customer.status === 'sumida'
+        ? `Oi, ${customer.name}! Tudo bem? 😊 Vi aqui que já faz um tempinho desde seu último atendimento de ${customer.lastService}. Queria saber se você gostaria de agendar novamente.`
+        : `Oi, ${customer.name}! Tudo bem? 😊 Seu próximo atendimento costuma acontecer por volta de agora. Se quiser, posso te passar os horários disponíveis.`;
+
+    const url = whatsappUrl(customer.whatsapp, message);
+    if (url !== '#') window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function customerStatusLabel(status: string) {
+    if (status === 'nova') return 'Nova cliente';
+    if (status === 'recorrente') return 'Recorrente';
+    if (status === 'risco') return 'Em risco';
+    return 'Sumida';
+  }
+
+  function formatInterval(value: number | null) {
+    return value === null
+      ? 'Ainda sem padrão'
+      : `${Math.round(value)} dias`;
+  }
+
+  function formatDays(value: number) {
+    return `${value} ${value === 1 ? 'dia' : 'dias'}`;
+  }
+
+  function formatReturnDate(value: string) {
+    const date = new Date(`${value}T12:00:00Z`);
+    return date.toLocaleDateString('pt-BR', {
+      timeZone: 'UTC',
+      day: '2-digit',
+      month: '2-digit',
+    });
+  }
+
+  function returnStatusText(item: ReturnRadarItem) {
+    if (item.status === 'overdue') {
+      return `${item.daysOverdue} ${item.daysOverdue === 1 ? 'dia' : 'dias'} atrasada`;
+    }
+    if (item.status === 'upcoming') {
+      if (item.daysUntilReturn === 0) return 'Retorno previsto para hoje';
+      if (item.daysUntilReturn === 1) return 'Retorno previsto para amanhã';
+      return `Retorno previsto em ${item.daysUntilReturn} dias`;
+    }
+    return `Retorno previsto: ${formatReturnDate(item.expectedReturnAt)}`;
+  }
+
+  const radarGroups = [
+    {
+      key: 'overdue',
+      title: 'Clientes atrasadas',
+      eyebrow: 'Precisa de atenção',
+      items: radar.overdue,
+      className: 'radar-group overdue',
+      icon: '🔴',
+    },
+    {
+      key: 'upcoming',
+      title: 'Próximas do retorno',
+      eyebrow: 'Próximos dias',
+      items: radar.upcoming,
+      className: 'radar-group upcoming',
+      icon: '🟡',
+    },
+    {
+      key: 'no_next',
+      title: 'Sem próximo agendamento',
+      eyebrow: 'Oportunidades',
+      items: radar.noNext,
+      className: 'radar-group no-next',
+      icon: '⚪',
+    },
+  ];
 
   return (
     <>
@@ -1200,102 +1578,279 @@ function Overview({
         <div>
           <div className="eyebrow">Visão geral</div>
           <h1>Bom te ver por aqui.</h1>
-          <p>
-            O essencial da sua agenda, sem complicação.
-          </p>
+          <p>Agora sua agenda também ajuda você a decidir o que fazer.</p>
         </div>
-
-        <a
-          className="button button-primary"
-          href="/dashboard/perfil"
-        >
+        <a className="button button-primary" href="/dashboard/perfil">
           <Settings2 size={17} />
           Configurar perfil
         </a>
       </div>
 
+      <section className="dashboard-section intelligence-today">
+        <div className="section-heading">
+          <div>
+            <div className="eyebrow">Inteligência</div>
+            <h2>O que fazer hoje?</h2>
+          </div>
+          <span>{actions.length} prioridades</span>
+        </div>
+
+        <div className="intelligence-actions">
+          {actions.map((item) => (
+            <div className="intelligence-action" key={item.title}>
+              <div>
+                <strong>{item.title}</strong>
+                <p>{item.text}</p>
+              </div>
+              {item.customer ? (
+                <button type="button" className="small-action" onClick={() => setSelectedCustomer(item.customer)}>
+                  Ver
+                </button>
+              ) : (
+                <a className="small-action intelligence-action-link" href={item.href || '/dashboard/agendamentos'}>
+                  {item.action}
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="overview-grid">
         <div className="metric-card warm">
           <span>Hoje</span>
           <strong>{todays.length}</strong>
-          <p>
-            {todays.length === 1
-              ? 'agendamento marcado'
-              : 'agendamentos marcados'}
-          </p>
+          <p>{todays.length === 1 ? 'agendamento marcado' : 'agendamentos marcados'}</p>
         </div>
-
         <div className="metric-card">
-          <span>Serviços ativos</span>
-          <strong>
-            {
-              data.services.filter(
-                (item) => item.is_active,
-              ).length
-            }
-          </strong>
-          <p>visíveis na sua página</p>
+          <span>Clientes recorrentes</span>
+          <strong>{customerProfiles.filter((item) => item.status !== 'nova').length}</strong>
+          <p>com histórico no sistema</p>
         </div>
-
         <div className="metric-card">
-          <span>Seu link</span>
-          <strong>
-            <Link2 size={22} />
-          </strong>
-          <p>pronto para compartilhar</p>
+          <span>Oportunidades</span>
+          <strong>{radar.all.length + lostCustomers.length + emptySlots.length}</strong>
+          <p>ações identificadas</p>
         </div>
       </div>
 
-      <section className="dashboard-section">
+      <section className="dashboard-section intelligence-revenue">
         <div className="section-heading">
           <div>
-            <div className="eyebrow">
-              Próximo atendimento
-            </div>
-            <h2>Agenda</h2>
+            <div className="eyebrow">Financeiro</div>
+            <h2>Previsão de faturamento</h2>
           </div>
+          <span>Valores baseados na agenda confirmada</span>
+        </div>
+        <div className="intelligence-revenue-grid">
+          <div><span>Agendado</span><strong>{formatCurrency(revenue.confirmed)}</strong><small>futuro confirmado</small></div>
+          <div><span>Próximos 7 dias</span><strong>{formatCurrency(revenue.next7)}</strong><small>já reservado</small></div>
+          <div><span>Próximos 30 dias</span><strong>{formatCurrency(revenue.next30)}</strong><small>já reservado</small></div>
+          <div><span>Oportunidade</span><strong>{formatCurrency(revenue.returnOpportunity)}</strong><small>estimativa de retorno</small></div>
+        </div>
+      </section>
 
-          <a
-            className="text-link"
-            href="/dashboard/agendamentos"
-          >
-            Ver agenda <ArrowRight size={15} />
-          </a>
+      <section className="dashboard-section return-radar-section">
+        <div className="section-heading">
+          <div>
+            <div className="eyebrow">Radar de Retorno</div>
+            <h2>Clientes que podem voltar</h2>
+          </div>
+          <span>{radar.all.length} oportunidades</span>
         </div>
 
-        {next ? (
-          <AppointmentCard appointment={next as PaymentAppointment} />
+        <div className="return-radar-summary">
+          <div className="return-radar-stat overdue"><span>🔴</span><strong>{radar.overdue.length}</strong><small>Atrasadas</small></div>
+          <div className="return-radar-stat upcoming"><span>🟡</span><strong>{radar.upcoming.length}</strong><small>Próximas</small></div>
+          <div className="return-radar-stat no-next"><span>⚪</span><strong>{radar.noNext.length}</strong><small>Sem próximo</small></div>
+        </div>
+
+        {radar.all.length ? (
+          <div className="return-radar-groups">
+            {radarGroups.map((group) =>
+              group.items.length ? (
+                <div className={group.className} key={group.key}>
+                  <div className="return-radar-group-heading">
+                    <div><span>{group.eyebrow}</span><h3>{group.icon} {group.title}</h3></div>
+                    <strong>{group.items.length}</strong>
+                  </div>
+                  <div className="return-radar-list">
+                    {group.items.slice(0, 5).map((item) => (
+                      <div className="return-radar-card" key={`${item.customerWhatsapp || item.customerName}-${item.lastAppointmentAt}`}>
+                        <div className="return-radar-main">
+                          <strong>{item.customerName}</strong>
+                          <span>{item.serviceName}</span>
+                          <small>Último atendimento: {brazilShortDate(item.lastAppointmentAt)} · Retorno habitual: {item.habitualDays} dias</small>
+                          <b>{returnStatusText(item)}</b>
+                        </div>
+                        {item.customerWhatsapp.trim() ? (
+                          <button type="button" className="return-radar-message" onClick={() => openReturnMessage(item)}>
+                            <MessageCircle size={15} /> Enviar mensagem
+                          </button>
+                        ) : <span className="return-radar-no-whatsapp">WhatsApp não cadastrado</span>}
+                      </div>
+                    ))}
+                  </div>
+                  {group.items.length > 5 && <span className="return-radar-more">+ {group.items.length - 5} outras oportunidades</span>}
+                </div>
+              ) : null,
+            )}
+          </div>
         ) : (
-          <Empty
-            title="Sua agenda está livre"
-            text="Quando alguém marcar um horário, ele aparece aqui."
-          />
+          <div className="return-radar-empty">
+            <div className="empty-icon"><Check size={19} /></div>
+            <div><strong>Por enquanto, nenhuma cliente precisa de retorno.</strong><p>Quando houver uma oportunidade, ela aparecerá aqui automaticamente.</p></div>
+          </div>
         )}
       </section>
 
-      <section className="quick-actions">
-        <a href="/dashboard/servicos">
-          <Plus size={18} />
-          <strong>Adicionar serviço</strong>
-          <span>Apresente o que você faz</span>
-        </a>
+      <div className="intelligence-two-column">
+        <section className="dashboard-section intelligence-list-section">
+          <div className="section-heading">
+            <div><div className="eyebrow">Retenção</div><h2>Clientes sumidas</h2></div>
+            <span>{lostCustomers.length}</span>
+          </div>
+          {lostCustomers.length ? (
+            <div className="intelligence-customer-list">
+              {lostCustomers.slice(0, 5).map((customer) => (
+                <button type="button" className="intelligence-customer" key={customer.key} onClick={() => setSelectedCustomer(customer)}>
+                  <div>
+                    <strong>{customer.name}</strong>
+                    <span>{customer.lastService} · último atendimento {brazilShortDate(customer.lastAppointmentAt)}</span>
+                    <small>{formatDays(customer.daysSinceLast)} sem voltar · habitual: {formatInterval(customer.averageInterval)}</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
+              ))}
+            </div>
+          ) : <div className="intelligence-empty">Nenhuma cliente está fora do período habitual de retorno.</div>}
+        </section>
 
-        <a href="/dashboard/horarios">
-          <Clock3 size={18} />
-          <strong>Configurar horários</strong>
-          <span>Defina quando atende</span>
-        </a>
+        <section className="dashboard-section intelligence-list-section">
+          <div className="section-heading">
+            <div><div className="eyebrow">Prevenção</div><h2>Clientes em risco</h2></div>
+            <span>{atRiskCustomers.length}</span>
+          </div>
+          {atRiskCustomers.length ? (
+            <div className="intelligence-customer-list">
+              {atRiskCustomers.slice(0, 5).map((customer) => (
+                <button type="button" className="intelligence-customer" key={customer.key} onClick={() => setSelectedCustomer(customer)}>
+                  <div>
+                    <strong>{customer.name}</strong>
+                    <span>{customer.lastService} · ticket médio {formatCurrency(customer.averageTicket)}</span>
+                    <small>{formatDays(customer.daysSinceLast)} desde o último · habitual: {formatInterval(customer.averageInterval)}</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
+              ))}
+            </div>
+          ) : <div className="intelligence-empty">Nenhuma cliente está atualmente em risco.</div>}
+        </section>
+      </div>
 
-        <a
-          href={`/agendar/${data.profile.slug}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <ExternalLink size={18} />
-          <strong>Ver meu perfil</strong>
-          <span>Veja como suas clientes veem</span>
-        </a>
+      <section className="dashboard-section intelligence-empty-slots">
+        <div className="section-heading">
+          <div><div className="eyebrow">Ocupação</div><h2>Radar de agenda vazia</h2></div>
+          <span>{emptySlots.length} oportunidades</span>
+        </div>
+        {emptySlots.length ? (
+          <div className="empty-slot-list">
+            {emptySlots.map((item) => (
+              <div className="empty-slot-card" key={`${item.startsAt}-${item.customer.key}`}>
+                <div>
+                  <strong>{brazilShortDate(item.startsAt)} · {brazilTime(item.startsAt)}</strong>
+                  <span>Sugerir para {item.customer.name}</span>
+                  <small>{item.reason}</small>
+                </div>
+                <button type="button" className="return-radar-message" onClick={() => openCustomerWhatsApp(item.customer)}>
+                  <MessageCircle size={15} /> Chamar
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="intelligence-empty">Nenhum horário livre próximo com uma sugestão clara de cliente.</div>
+        )}
       </section>
+
+      <section className="dashboard-section">
+        <div className="section-heading">
+          <div><div className="eyebrow">Próximo atendimento</div><h2>Agenda</h2></div>
+          <a className="text-link" href="/dashboard/agendamentos">Ver agenda <ArrowRight size={15} /></a>
+        </div>
+        {next ? <AppointmentCard appointment={next as PaymentAppointment} /> : <Empty title="Sua agenda está livre" text="Quando alguém marcar um horário, ele aparece aqui." />}
+      </section>
+
+      <section className="quick-actions">
+        <a href="/dashboard/servicos"><Plus size={18} /><strong>Adicionar serviço</strong><span>Apresente o que você faz</span></a>
+        <a href="/dashboard/horarios"><Clock3 size={18} /><strong>Configurar horários</strong><span>Defina quando atende</span></a>
+        <a href={`/agendar/${data.profile.slug}`} target="_blank" rel="noreferrer"><ExternalLink size={18} /><strong>Ver meu perfil</strong><span>Veja como suas clientes veem</span></a>
+      </section>
+
+      {selectedCustomer && (
+        <div className="return-message-overlay" role="dialog" aria-modal="true">
+          <div className="customer-profile-modal">
+            <div className="return-message-top">
+              <div><span className="eyebrow">Perfil 360º</span><h2>{selectedCustomer.name}</h2></div>
+              <button type="button" className="icon-button" onClick={() => setSelectedCustomer(null)} aria-label="Fechar"><X size={18} /></button>
+            </div>
+
+            <div className="customer-profile-status">{customerStatusLabel(selectedCustomer.status)}</div>
+
+            <div className="customer-profile-grid">
+              <div><span>WhatsApp</span><strong>{selectedCustomer.whatsapp || 'Não cadastrado'}</strong></div>
+              <div><span>Atendimentos</span><strong>{selectedCustomer.totalAppointments}</strong></div>
+              <div><span>Último serviço</span><strong>{selectedCustomer.lastService}</strong></div>
+              <div><span>Último valor</span><strong>{formatCurrency(selectedCustomer.lastPrice)}</strong></div>
+              <div><span>Ticket médio</span><strong>{formatCurrency(selectedCustomer.averageTicket)}</strong></div>
+              <div><span>Retorno habitual</span><strong>{formatInterval(selectedCustomer.averageInterval)}</strong></div>
+              <div><span>Sem agendar</span><strong>{formatDays(selectedCustomer.daysSinceLast)}</strong></div>
+              <div><span>Último atendimento</span><strong>{brazilShortDate(selectedCustomer.lastAppointmentAt)}</strong></div>
+            </div>
+
+            <div className="customer-history">
+              <span className="eyebrow">Histórico recente</span>
+              {selectedCustomer.appointments.slice(-5).reverse().map((appointment: PaymentAppointment) => (
+                <div key={appointment.id}>
+                  <span>{brazilShortDate(appointment.starts_at)}</span>
+                  <strong>{appointment.service?.name || 'Serviço'}</strong>
+                  <b>{formatCurrency(Number(appointment.price || 0))}</b>
+                </div>
+              ))}
+            </div>
+
+            <div className="return-message-actions">
+              <button type="button" className="button button-soft" onClick={() => setSelectedCustomer(null)}>Fechar</button>
+              {selectedCustomer.whatsapp && (
+                <button type="button" className="button button-primary" onClick={() => openCustomerWhatsApp(selectedCustomer)}>
+                  <MessageCircle size={17} /> Chamar no WhatsApp
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedReturn && (
+        <div className="return-message-overlay" role="dialog" aria-modal="true" aria-labelledby="return-message-title">
+          <div className="return-message-modal">
+            <div className="return-message-top">
+              <div><span className="eyebrow">Radar de Retorno</span><h2 id="return-message-title">Enviar mensagem para {selectedReturn.customerName}</h2></div>
+              <button type="button" className="icon-button" onClick={closeReturnMessage} aria-label="Fechar"><X size={18} /></button>
+            </div>
+            <label className="field return-message-field">
+              <span>Mensagem</span>
+              <textarea value={returnMessage} onChange={(event) => setReturnMessage(event.target.value)} autoFocus />
+            </label>
+            <div className="return-message-actions">
+              <button type="button" className="button button-soft" onClick={closeReturnMessage}>Cancelar</button>
+              <button type="button" className="button button-primary" onClick={openWhatsApp} disabled={!selectedReturn.customerWhatsapp.trim() || !returnMessage.trim()}>
+                <MessageCircle size={17} /> Abrir WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -2006,47 +2561,58 @@ function Blocks({
     reason: '',
   });
 
- async function add(event: FormEvent) {
-  event.preventDefault();
+  async function add(event: FormEvent) {
+    event.preventDefault();
 
-  const startsAt = new Date(form.starts_at);
-  const endsAt = new Date(form.ends_at);
+    const startsAt = new Date(form.starts_at);
+    const endsAt = new Date(form.ends_at);
 
-  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-    return;
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+      window.alert('Informe início e fim válidos.');
+      return;
+    }
+
+    if (endsAt <= startsAt) {
+      window.alert('O fim do bloqueio deve ser depois do início.');
+      return;
+    }
+
+    const result = await supabase
+      .from('blocked_times')
+      .insert({
+        profile_id: data.profile.id,
+        professional_id: data.profile.id,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        start_at: startsAt.toISOString(),
+        end_at: endsAt.toISOString(),
+        reason: form.reason.trim() || null,
+      })
+      .select()
+      .maybeSingle();
+
+    if (result.error) {
+      console.error('ERRO AO ADICIONAR BLOQUEIO:', result.error);
+      window.alert('Não foi possível adicionar o bloqueio.');
+      return;
+    }
+
+    if (result.data) {
+      setData({
+        ...data,
+        blocks: [
+          ...data.blocks,
+          result.data as BlockedTime,
+        ],
+      });
+
+      setForm({
+        starts_at: '',
+        ends_at: '',
+        reason: '',
+      });
+    }
   }
-
-  if (endsAt <= startsAt) {
-    return;
-  }
-
-  const result = await supabase
-    .from('blocked_times')
-    .insert({
-      profile_id: data.profile.id,
-      professional_id: data.profile.id,
-      starts_at: startsAt.toISOString(),
-      ends_at: endsAt.toISOString(),
-      start_at: startsAt.toISOString(),
-      end_at: endsAt.toISOString(),
-      reason: form.reason.trim() || null,
-    })
-    .select()
-    .maybeSingle();
-
-  if (!result.error && result.data) {
-    setData({
-      ...data,
-      blocks: [...data.blocks, result.data as BlockedTime],
-    });
-
-    setForm({
-      starts_at: '',
-      ends_at: '',
-      reason: '',
-    });
-  }
-}
 
   async function remove(id: string) {
     const result = await supabase
@@ -3207,6 +3773,53 @@ function DesignSystem() {
       @media (max-width: 900px) {
         .public-links { background:rgba(25,27,30,.98); border-color:var(--app-line); }
       }
+      .return-radar-section { overflow:visible; }
+      .return-radar-summary { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; margin-bottom:14px; }
+      .return-radar-stat { min-height:72px; border:1px solid var(--app-line-strong); border-radius:10px; background:var(--app-surface); padding:11px 12px; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto; column-gap:8px; align-items:center; }
+      .return-radar-stat span { grid-row:1 / span 2; font-size:14px; }
+      .return-radar-stat strong { font-size:20px; line-height:1; }
+      .return-radar-stat small { color:var(--app-muted); font-size:10px; margin-top:2px; }
+      .return-radar-groups { display:grid; gap:10px; }
+      .return-radar-group-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+      .return-radar-group-heading > div > span { color:var(--app-muted); font-size:10px; text-transform:uppercase; letter-spacing:.08em; font-weight:700; }
+      .return-radar-group-heading h3 { margin:3px 0 0; font-size:13px; letter-spacing:-.02em; }
+      .return-radar-group-heading > strong { min-width:24px; height:24px; display:grid; place-items:center; border:1px solid var(--app-line); border-radius:999px; color:var(--app-muted); font-size:11px; }
+      .return-radar-list { display:grid; gap:6px; }
+      .return-radar-card { display:flex; align-items:center; justify-content:space-between; gap:14px; border:1px solid var(--app-line); border-radius:9px; background:var(--app-surface); padding:11px 12px; }
+      .return-radar-main { min-width:0; display:grid; gap:3px; }
+      .return-radar-main > strong { font-size:13px; color:var(--app-text); }
+      .return-radar-main > span { font-size:11px; color:var(--app-text-2); }
+      .return-radar-main > small { font-size:10px; color:var(--app-muted); }
+      .return-radar-main > b { font-size:10px; font-weight:700; color:var(--app-text-2); }
+      .return-radar-message { flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--app-line-strong); border-radius:7px; padding:8px 10px; background:var(--app-text); color:var(--app-bg); font:inherit; font-size:10px; font-weight:700; cursor:pointer; }
+      .return-radar-message:hover { opacity:.88; }
+      .return-radar-no-whatsapp { flex:0 0 auto; color:var(--app-muted); font-size:9px; }
+      .return-radar-more { display:block; margin-top:7px; color:var(--app-muted); font-size:10px; }
+      .return-radar-empty { display:flex; align-items:center; gap:12px; padding:14px 2px 3px; color:var(--app-text-2); }
+      .return-radar-empty .empty-icon { flex:0 0 auto; }
+      .return-radar-empty strong { font-size:12px; }
+      .return-radar-empty p { margin:3px 0 0; color:var(--app-muted); font-size:10px; }
+      .return-message-overlay { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:18px; background:rgba(0,0,0,.62); }
+      .return-message-modal { width:min(520px, 100%); border:1px solid var(--app-line-strong); border-radius:12px; background:var(--app-surface); padding:18px; box-shadow:0 24px 80px rgba(0,0,0,.35); }
+      .return-message-top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:15px; }
+      .return-message-top h2 { margin:5px 0 0; font-size:18px; line-height:1.12; letter-spacing:-.035em; color:var(--app-text); }
+      .return-message-field { margin:0 !important; }
+      .return-message-field textarea { min-height:150px; resize:vertical; }
+      .return-message-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:13px; }
+      .return-message-actions .button { min-width:120px; }
+      @media (max-width:640px) {
+        .return-radar-summary { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+        .return-radar-stat { min-height:64px; padding:9px; }
+        .return-radar-stat strong { font-size:18px; }
+        .return-radar-card { align-items:stretch; flex-direction:column; gap:9px; }
+        .return-radar-message { width:100%; min-height:40px; }
+        .return-radar-no-whatsapp { padding-top:3px; }
+        .return-message-overlay { align-items:end; padding:8px; }
+        .return-message-modal { width:100%; border-radius:11px; padding:15px; }
+        .return-message-field textarea { min-height:170px; }
+        .return-message-actions { display:grid; grid-template-columns:1fr 1.25fr; }
+        .return-message-actions .button { width:100%; min-width:0; }
+      }
       /* FINAL PRODUCT UI — less decoration, more system */
       .brand { text-decoration:none !important; }
       .brand-button { border:0; padding:0; margin:0; background:transparent; color:inherit; font:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:10px; }
@@ -3269,6 +3882,61 @@ function DesignSystem() {
         .hours-settings { align-items:stretch; flex-direction:column; gap:12px; }
         .interval-field { width:100%; }
         .hours-preview { grid-column:1; }
+      }
+
+      /* INTELLIGENCE DASHBOARD */
+      .intelligence-today { margin-bottom:14px; }
+      .intelligence-actions { display:grid; gap:7px; }
+      .intelligence-action { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 13px; border:1px solid var(--app-line); border-radius:8px; background:var(--app-surface); }
+      .intelligence-action strong { display:block; font-size:12px; }
+      .intelligence-action p { margin:3px 0 0; color:var(--app-muted); font-size:10px; line-height:1.45; }
+      .intelligence-action-link { width:auto; min-width:max-content; height:auto; text-decoration:none; }
+      .intelligence-revenue { margin-bottom:14px; }
+      .intelligence-revenue-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; }
+      .intelligence-revenue-grid > div { padding:12px; border:1px solid var(--app-line); border-radius:8px; background:var(--app-surface); }
+      .intelligence-revenue-grid span,.intelligence-revenue-grid small { display:block; color:var(--app-muted); font-size:9px; }
+      .intelligence-revenue-grid strong { display:block; margin:7px 0 3px; font-size:19px; letter-spacing:-.04em; }
+      .intelligence-two-column { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0; }
+      .intelligence-list-section { min-width:0; }
+      .intelligence-customer-list { display:grid; gap:6px; }
+      .intelligence-customer { width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 12px; border:1px solid var(--app-line); border-radius:8px; background:var(--app-surface); color:var(--app-text); text-align:left; cursor:pointer; }
+      .intelligence-customer:hover { border-color:var(--app-line-strong); }
+      .intelligence-customer > div { min-width:0; display:grid; gap:3px; }
+      .intelligence-customer strong { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .intelligence-customer span,.intelligence-customer small { color:var(--app-muted); font-size:9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .intelligence-empty { padding:18px 8px; color:var(--app-muted); font-size:10px; line-height:1.5; text-align:center; border:1px dashed var(--app-line-strong); border-radius:8px; }
+      .intelligence-empty-slots { margin-bottom:14px; }
+      .empty-slot-list { display:grid; gap:6px; }
+      .empty-slot-card { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 12px; border:1px solid var(--app-line); border-radius:8px; background:var(--app-surface); }
+      .empty-slot-card > div { min-width:0; display:grid; gap:3px; }
+      .empty-slot-card strong { font-size:12px; }
+      .empty-slot-card span { font-size:10px; color:var(--app-text-2); }
+      .empty-slot-card small { color:var(--app-muted); font-size:9px; }
+      .customer-profile-modal { width:min(620px,100%); max-height:calc(100vh - 36px); overflow:auto; border:1px solid var(--app-line-strong); border-radius:12px; background:var(--app-surface); padding:18px; box-shadow:0 24px 80px rgba(0,0,0,.35); }
+      .customer-profile-status { display:inline-flex; padding:6px 9px; border:1px solid var(--app-line); border-radius:999px; color:var(--app-text-2); font-size:10px; font-weight:750; }
+      .customer-profile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin:14px 0; }
+      .customer-profile-grid > div { padding:10px; border:1px solid var(--app-line); border-radius:8px; background:var(--app-surface-soft); }
+      .customer-profile-grid span { display:block; color:var(--app-muted); font-size:8px; text-transform:uppercase; letter-spacing:.06em; }
+      .customer-profile-grid strong { display:block; margin-top:5px; font-size:11px; overflow-wrap:anywhere; }
+      .customer-history { display:grid; gap:6px; margin-top:14px; }
+      .customer-history > div { display:grid; grid-template-columns:70px 1fr auto; align-items:center; gap:8px; padding:9px 10px; border:1px solid var(--app-line); border-radius:7px; }
+      .customer-history > div span { color:var(--app-muted); font-size:9px; }
+      .customer-history > div strong { font-size:10px; }
+      .customer-history > div b { font-size:10px; }
+      @media (max-width:720px) {
+        .intelligence-two-column { grid-template-columns:1fr; }
+        .intelligence-revenue-grid { grid-template-columns:1fr 1fr; }
+      }
+      @media (max-width:640px) {
+        .intelligence-action { align-items:flex-start; }
+        .intelligence-action .small-action { min-width:max-content; width:auto; padding:0 10px; }
+        .intelligence-revenue-grid { gap:6px; }
+        .intelligence-revenue-grid > div { padding:10px; }
+        .intelligence-revenue-grid strong { font-size:16px; }
+        .empty-slot-card { align-items:stretch; flex-direction:column; }
+        .empty-slot-card .return-radar-message { width:100%; }
+        .customer-profile-modal { max-height:calc(100vh - 20px); padding:15px; }
+        .customer-profile-grid { grid-template-columns:1fr 1fr; }
       }
     `}</style>
   );
