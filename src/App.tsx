@@ -21,6 +21,7 @@ import {
   Upload,
   Image as ImageIcon,
   Palette,
+  Search,
   X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -1468,6 +1469,21 @@ function Overview({
   );
 }
 
+type Customer = {
+  key: string;
+  name: string;
+  whatsapp: string;
+  totalAppointments: number;
+  lastAppointmentAt: string;
+  lastService: string;
+  lastPrice: number;
+  averageTicket: number;
+  averageInterval: number | null;
+  daysSinceLast: number;
+  status: 'nova' | 'recorrente' | 'risco' | 'sumida';
+  appointments: PaymentAppointment[];
+};
+
 function IntelligencePage({
   data,
   mode,
@@ -1475,21 +1491,7 @@ function IntelligencePage({
   data: NonNullable<OwnerData>;
   mode: 'lost' | 'risk' | 'empty' | 'profile' | 'today' | 'revenue';
 }) {
-  type Customer = {
-    key: string;
-    name: string;
-    whatsapp: string;
-    totalAppointments: number;
-    lastAppointmentAt: string;
-    lastService: string;
-    lastPrice: number;
-    averageTicket: number;
-    averageInterval: number | null;
-    daysSinceLast: number;
-    status: 'nova' | 'recorrente' | 'risco' | 'sumida';
-    appointments: PaymentAppointment[];
-  };
-
+  
   const confirmedAppointments = useMemo(
     () => data.appointments.filter((item) => item.status === 'confirmed'),
     [data.appointments],
@@ -1724,37 +1726,109 @@ function CustomerListPage({
     appointments: PaymentAppointment[];
   }>;
   emptyText: string;
-  onSelect: (customer: {
-    key: string;
-    name: string;
-    whatsapp: string;
-    totalAppointments: number;
-    lastAppointmentAt: string;
-    lastService: string;
-    lastPrice: number;
-    averageTicket: number;
-    averageInterval: number | null;
-    daysSinceLast: number;
-    status: 'nova' | 'recorrente' | 'risco' | 'sumida';
-    appointments: PaymentAppointment[];
-  }) => void;
-  onWhatsApp: (customer: {
-    key: string;
-    name: string;
-    whatsapp: string;
-    totalAppointments: number;
-    lastAppointmentAt: string;
-    lastService: string;
-    lastPrice: number;
-    averageTicket: number;
-    averageInterval: number | null;
-    daysSinceLast: number;
-    status: 'nova' | 'recorrente' | 'risco' | 'sumida';
-    appointments: PaymentAppointment[];
-  }) => void;
+  onSelect: (customer: Customer) => void;
+  onWhatsApp: (customer: Customer) => void;
 }) {
-  if (!customers.length) return <section className="dashboard-section"><div className="intelligence-empty">{emptyText}</div></section>;
-  return <section className="dashboard-section intelligence-list-section"><div className="intelligence-customer-list">{customers.map((customer) => <div className="intelligence-customer" key={customer.key}><button type="button" className="intelligence-customer-main" onClick={() => onSelect(customer)}><div><strong>{customer.name}</strong><span>{customer.lastService} · último atendimento {brazilShortDate(customer.lastAppointmentAt)}</span><small>{customer.daysSinceLast} dias desde o último atendimento</small></div><ArrowRight size={16} /></button>{customer.whatsapp && <button type="button" className="return-radar-message" onClick={() => onWhatsApp(customer)}><MessageCircle size={15} /> WhatsApp</button>}</div>)}</div></section>;
+  if (!customers.length) {
+    return (
+      <section className="dashboard-section">
+        <div className="intelligence-empty">{emptyText}</div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="dashboard-section intelligence-list-section profile360-directory">
+      <div className="profile360-directory-header">
+        <div>
+          <div className="eyebrow">Clientes</div>
+          <h2>Todas as clientes</h2>
+          <p>{customers.length} cliente{customers.length === 1 ? '' : 's'} cadastrada{customers.length === 1 ? '' : 's'}</p>
+        </div>
+      </div>
+
+      <div className="profile360-search-shell">
+        <Search size={17} />
+        <input
+          type="search"
+          placeholder="Buscar cliente..."
+          aria-label="Buscar cliente"
+          onChange={(event) => {
+            const query = event.target.value.trim().toLowerCase();
+            const cards = document.querySelectorAll<HTMLElement>('[data-profile360-customer]');
+            cards.forEach((card) => {
+              const name = card.dataset.customerName || '';
+              card.hidden = Boolean(query) && !name.includes(query);
+            });
+          }}
+        />
+      </div>
+
+      <div className="profile360-filter-row" aria-label="Filtros de clientes">
+        <button type="button" className="profile360-filter active">Todos</button>
+        <button type="button" className="profile360-filter" disabled>Ativas</button>
+        <button type="button" className="profile360-filter" disabled>Sumidas</button>
+        <button type="button" className="profile360-filter" disabled>Em risco</button>
+      </div>
+
+      <div className="profile360-list-title">
+        <div>
+          <span className="eyebrow">Lista</span>
+          <strong>Todos</strong>
+        </div>
+        <span>{customers.length}</span>
+      </div>
+
+      <div className="profile360-customer-list">
+        {customers.map((customer) => (
+          <article
+            className="profile360-customer-card"
+            key={customer.key}
+            data-profile360-customer
+            data-customer-name={customer.name.toLowerCase()}
+          >
+            <button
+              type="button"
+              className="profile360-customer-content"
+              onClick={() => onSelect(customer)}
+            >
+              <span className="profile360-avatar" aria-hidden="true">
+                {customer.name.trim().charAt(0).toUpperCase() || '?'}
+              </span>
+
+              <span className="profile360-customer-body">
+                <strong>{customer.name}</strong>
+                <span className="profile360-customer-whatsapp">
+                  {customer.whatsapp || 'WhatsApp não cadastrado'}
+                </span>
+                <span className="profile360-customer-meta">
+                  Último atendimento: {brazilShortDate(customer.lastAppointmentAt)}
+                </span>
+                <span className="profile360-customer-meta">
+                  {customer.totalAppointments} atendimento{customer.totalAppointments === 1 ? '' : 's'}
+                </span>
+              </span>
+
+              <span className="profile360-customer-arrow" aria-hidden="true">
+                <ArrowRight size={17} />
+              </span>
+            </button>
+
+            {customer.whatsapp && (
+              <button
+                type="button"
+                className="profile360-whatsapp-button"
+                onClick={() => onWhatsApp(customer)}
+              >
+                <MessageCircle size={15} />
+                WhatsApp
+              </button>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function AppointmentCard({
@@ -4092,7 +4166,273 @@ function DesignSystem() {
         .service-payment-settings .field select { width:100% !important; min-width:0 !important; }
       }
 
-    `}</style>
+    /* =========================================================
+   PERFIL 360º — DIRETÓRIO MOBILE-FIRST
+   ========================================================= */
+.profile360-directory {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.profile360-directory-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.profile360-directory-header h2 {
+  margin: 3px 0 4px;
+}
+
+.profile360-directory-header p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.profile360-search-shell {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: var(--app-surface-soft);
+  color: var(--app-muted);
+}
+
+.profile360-search-shell input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.profile360-search-shell input::placeholder {
+  color: var(--app-muted);
+}
+
+.profile360-filter-row {
+  display: flex;
+  gap: 7px;
+  width: 100%;
+  overflow-x: auto;
+  padding: 12px 0 16px;
+  scrollbar-width: none;
+}
+
+.profile360-filter-row::-webkit-scrollbar {
+  display: none;
+}
+
+.profile360-filter {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: var(--app-surface-soft);
+  color: var(--app-text-2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.profile360-filter.active {
+  border-color: var(--app-text-2);
+  color: var(--app-text);
+}
+
+.profile360-filter:disabled {
+  opacity: .58;
+}
+
+.profile360-list-title {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.profile360-list-title > div {
+  min-width: 0;
+}
+
+.profile360-list-title strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 16px;
+}
+
+.profile360-list-title > span {
+  flex: 0 0 auto;
+  color: var(--app-muted);
+  font-size: 11px;
+}
+
+.profile360-customer-list {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.profile360-customer-card {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 11px;
+  background: var(--app-surface);
+  overflow: hidden;
+}
+
+.profile360-customer-card[hidden] {
+  display: none;
+}
+
+.profile360-customer-content {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 10px;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.profile360-avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--app-line-strong);
+  background: var(--app-surface-soft);
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.profile360-customer-body {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.profile360-customer-body > strong,
+.profile360-customer-whatsapp,
+.profile360-customer-meta {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.profile360-customer-body > strong {
+  font-size: 13px;
+}
+
+.profile360-customer-whatsapp {
+  color: var(--app-text-2);
+  font-size: 11px;
+}
+
+.profile360-customer-meta {
+  color: var(--app-muted);
+  font-size: 10px;
+}
+
+.profile360-customer-arrow {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--app-muted);
+}
+
+.profile360-whatsapp-button {
+  min-width: 86px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: var(--app-surface-soft);
+  color: var(--app-text-2);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .profile360-directory {
+    padding: 14px !important;
+  }
+
+  .profile360-directory-header {
+    margin-bottom: 13px;
+  }
+
+  .profile360-directory-header h2 {
+    font-size: 19px;
+  }
+
+  .profile360-customer-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    padding: 9px;
+  }
+
+  .profile360-whatsapp-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .profile360-directory {
+    padding: 12px !important;
+  }
+
+  .profile360-customer-content {
+    grid-template-columns: 36px minmax(0, 1fr) 20px;
+    gap: 8px;
+  }
+
+  .profile360-avatar {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+`}</style>
   );
 }
 
