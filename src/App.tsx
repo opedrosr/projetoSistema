@@ -2006,34 +2006,47 @@ function Blocks({
     reason: '',
   });
 
-  async function add(event: FormEvent) {
-    event.preventDefault();
+ async function add(event: FormEvent) {
+  event.preventDefault();
 
-    const result = await supabase
-      .from('blocked_times')
-      .insert({
-        ...form,
-        profile_id: data.profile.id,
-      })
-      .select()
-      .maybeSingle();
+  const startsAt = new Date(form.starts_at);
+  const endsAt = new Date(form.ends_at);
 
-    if (!result.error && result.data) {
-      setData({
-        ...data,
-        blocks: [
-          ...data.blocks,
-          result.data as BlockedTime,
-        ],
-      });
-
-      setForm({
-        starts_at: '',
-        ends_at: '',
-        reason: '',
-      });
-    }
+  if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+    return;
   }
+
+  if (endsAt <= startsAt) {
+    return;
+  }
+
+  const result = await supabase
+    .from('blocked_times')
+    .insert({
+      profile_id: data.profile.id,
+      professional_id: data.profile.id,
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt.toISOString(),
+      start_at: startsAt.toISOString(),
+      end_at: endsAt.toISOString(),
+      reason: form.reason.trim() || null,
+    })
+    .select()
+    .maybeSingle();
+
+  if (!result.error && result.data) {
+    setData({
+      ...data,
+      blocks: [...data.blocks, result.data as BlockedTime],
+    });
+
+    setForm({
+      starts_at: '',
+      ends_at: '',
+      reason: '',
+    });
+  }
+}
 
   async function remove(id: string) {
     const result = await supabase
